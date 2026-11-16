@@ -1,6 +1,7 @@
 # IoT Traffic Analytics & DoS Detection
 
 ### Informasi Proyek
+- **Kelompok:** 7
 - **Judul PBL:** Pengembangan Sistem Analytic Traffic IoT untuk Deteksi Traffic Normal dan Anomali DoS
 - **Kelas:** TMJ 5A
 
