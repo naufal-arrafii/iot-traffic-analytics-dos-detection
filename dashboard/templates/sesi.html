@@ -1,0 +1,222 @@
+{% extends "base.html" %}
+{% block title %}Sesi & Dataset — MINT Dashboard{% endblock %}
+{% block content %}
+
+<div class="banner MENUNGGU" id="sesbanner">
+  <span id="sesmsg">Perekam Sesi — PCAP + Dataset CSV berlabel, tanpa perlu Wireshark/tshark</span>
+  <span class="scen" id="sessub">perekam mandiri dari sisi broker</span>
+</div>
+
+<div class="grid2s">
+  <div>
+    <h2 class="sec">Kendali Rekam Sesi</h2>
+    <div class="panel">
+      <div class="param">
+        <div class="prow">
+          <div>
+            <label>Label sesi (contoh: BASE, S1, UJI_PAGI)</label>
+            <input id="label" maxlength="24" placeholder="BASE" value="BASE">
+          </div>
+          <div>
+            <label>Durasi otomatis (detik, kosong = manual)</label>
+            <input id="durasi" type="number" min="10" max="7200" placeholder="mis. 300">
+          </div>
+        </div>
+        <div class="hint">Disarankan: rekam <b>BASE</b> 2–5 menit saat jaringan
+          normal untuk kalibrasi threshold, lalu rekam <b>S1..S4</b> sambil
+          menjalankan serangan dari menu <a href="/serang" style="color:var(--cyan)">Serangan</a>.
+          Bila label sudah dipakai, berkas baru otomatis diberi akhiran _2, _3, …</div>
+      </div>
+
+      <div class="btnrow">
+        <button class="btn danger" id="btnStart" onclick="mulaiSesi()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/></svg>
+          MULAI REKAM</button>
+        <button class="btn" id="btnStop" onclick="stopSesi()" disabled>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
+          STOP &amp; SIMPAN</button>
+        <span class="msg" id="sesaksi"></span>
+      </div>
+
+      <div class="status" id="sesstatus"><span class="empty">Belum ada sesi di jendela ini — tekan MULAI REKAM.</span></div>
+
+      <div id="livebox" style="display:none">
+        <div class="statstrip">
+          <div class="st"><span class="l">Berjalan</span><b id="lvel" class="cy">–</b></div>
+          <div class="st"><span class="l">Pesan direkam</span><b id="lvmsg" class="cy">–</b></div>
+          <div class="st"><span class="l">Volume</span><b id="lvbyte" class="cy">–</b></div>
+          <div class="st"><span class="l">Ukuran PCAP</span><b id="lvpcap" class="cy">–</b></div>
+          <div class="st live"><span class="dotg"></span> tumbuh live</div>
+        </div>
+        <table>
+          <thead><tr><th>Perangkat</th><th>Pesan</th><th>Volume</th></tr></thead>
+          <tbody id="lvdev"><tr><td colspan="3" class="empty">menunggu pesan…</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <h2 class="sec">Riwayat Sesi (jendela dashboard ini)</h2>
+    <div class="panel tscroll">
+      <table id="seshist"><thead><tr>
+        <th>Mulai</th><th>Label</th><th>Pesan</th><th>PCAP</th><th>CSV</th><th>Status</th>
+      </tr></thead><tbody><tr><td colspan="6" class="empty">belum ada</td></tr></tbody></table>
+    </div>
+  </div>
+
+  <div>
+    <h2 class="sec">Cara Kerja Perekam</h2>
+    <div class="panel">
+      <ol class="alur">
+        <li>Perekam memantau <b>semua pesan yang sampai ke broker</b> (subscribe iot/#) — sumber yang sama dengan analyzer.</li>
+        <li>Setiap pesan ditulis sebagai <b>paket MQTT-PUBLISH valid</b> (Ethernet/IP/TCP lengkap dengan checksum, MAC &amp; IP node asli dari devices.json) ke <code>captures/&lt;label&gt;.pcap</code> — bisa dibuka langsung di Wireshark.</li>
+        <li>Sekaligus dihitung <b>metrik window 1 detik</b> per perangkat — skema sama dengan <code>dataset_BASE.csv</code> — disimpan ke <code>data/dataset_&lt;label&gt;.csv</code> saat sesi dihentikan.</li>
+        <li>Dataset siap dipakai: <code>python scripts/plot_compare.py data/dataset_BASE.csv data/dataset_S1.csv</code> atau kalibrasi ulang threshold dari menu Pengaturan.</li>
+      </ol>
+      <div class="hint" style="margin-top:10px">Kenapa PCAP tidak pernah kosong? Perekam lama bergantung pada
+        tshark/Wireshark + hak admin + pemilihan interface — bila tidak terpasang, file .pcap
+        kosong (bug v9.2.1). Perekam baru ini murni Python: nol dependensi, dan malah
+        <b>lebih lengkap</b> — serangan dari web yang lewat loopback ikut terekam
+        (tidak terlihat oleh capture NIC biasa).</div>
+    </div>
+
+    <h2 class="sec">Berkas Hasil</h2>
+    <div class="panel tscroll">
+      <table id="files"><thead><tr>
+        <th>Berkas</th><th>Jenis</th><th>Ukuran</th><th>Baris</th><th>Diubah</th><th></th>
+      </tr></thead><tbody><tr><td colspan="6" class="empty">memuat…</td></tr></tbody></table>
+    </div>
+  </div>
+</div>
+
+<style>
+  .grid2s{display:grid;grid-template-columns:1.5fr 1fr;gap:0 16px}
+  @media(max-width:960px){.grid2s{grid-template-columns:1fr}}
+  .param label{display:block;font-size:11.5px;font-weight:700;color:var(--muted);
+               text-transform:uppercase;letter-spacing:.8px;margin:10px 0 5px}
+  .param input{width:100%;padding:9px 11px;background:var(--input-bg);color:var(--text);
+        border:1px solid var(--input-line);border-radius:8px;font-size:13.5px;outline:none}
+  .param input:focus{border-color:var(--cyan)}
+  .prow{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+  .hint{font-size:11.5px;color:var(--muted);margin-top:8px;line-height:1.55}
+  .btnrow{display:flex;gap:10px;align-items:center;margin-top:16px;flex-wrap:wrap}
+  .btn.danger{background:linear-gradient(135deg,#ef4444,#b91c1c);color:#fff;border:none}
+  .btn.danger:hover{opacity:.92;color:#fff}
+  .btn:disabled{opacity:.45;cursor:not-allowed}
+  .status{margin-top:14px;border-top:1px solid var(--line);padding-top:12px;font-size:13px}
+  .mono{font-family:Consolas,monospace;font-size:12px}
+  .alur{padding-left:18px;font-size:13px;line-height:1.8;color:var(--text)}
+  .alur b{color:var(--cyan-strong)}
+  code{background:var(--cyan-dim);color:var(--cyan);border-radius:5px;padding:1px 6px;font-size:11.5px}
+  .statstrip{display:flex;gap:10px;flex-wrap:wrap;margin:14px 0 10px}
+  .st{background:var(--panel2);border:1px solid var(--line);border-radius:10px;
+      padding:8px 14px;display:flex;align-items:center;gap:9px}
+  .st .l{color:var(--muted);font-size:11px}
+  .st b{font-size:16px}
+  .st b.cy{color:var(--cyan-strong)}
+  .st.live{border-color:rgba(52,211,153,.4)}
+  .st.live .dotg{width:8px;height:8px;border-radius:50%;background:var(--green);
+                 animation:beat 1.4s infinite}
+  @keyframes beat{50%{opacity:.35}}
+  .recdot{display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--red);
+          margin-right:7px;animation:beat 1.1s infinite}
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script>
+/* ============================ KENDALI SESI REKAM (v9.2.5) ============================ */
+async function mulaiSesi(){
+  const msg = $('sesaksi');
+  msg.className = 'msg info'; msg.textContent = 'Memulai…';
+  try{
+    const body = new URLSearchParams({_csrf: CSRF, label: $('label').value,
+                                      durasi: $('durasi').value});
+    const r = await jfetch('/api/session/start', {method: 'POST', body});
+    const j = await r.json();
+    msg.className = 'msg ' + (j.ok ? 'ok' : 'err');
+    msg.textContent = j.msg || '';
+    if(j.ok) tick();
+  }catch(e){ msg.className = 'msg err'; msg.textContent = 'Tidak dapat menghubungi server.'; }
+}
+async function stopSesi(){
+  const msg = $('sesaksi');
+  msg.className = 'msg info'; msg.textContent = 'Menyimpan PCAP + CSV…';
+  try{
+    const r = await jfetch('/api/session/stop', {
+      method: 'POST', body: new URLSearchParams({_csrf: CSRF})});
+    const j = await r.json();
+    msg.className = 'msg ' + (j.ok ? 'ok' : 'err');
+    msg.textContent = j.msg || '';
+    tick();
+  }catch(e){ msg.className = 'msg err'; msg.textContent = 'Tidak dapat menghubungi server.'; }
+}
+
+function renderStatus(j){
+  const run = j.running, info = j.info;
+  $('btnStart').disabled = run;
+  $('btnStop').disabled = !run;
+  $('label').disabled = run;
+  const b = $('sesbanner');
+  if(run && info){
+    b.className = 'banner SERANGAN';
+    $('sesmsg').innerHTML = `<span class="recdot"></span>SESI '<b>${esc(info.label)}</b>' SEDANG BERJALAN`;
+    $('sessub').textContent = info.sisa != null
+      ? `otomatis berhenti dalam ±${info.sisa} dtk` : 'tekan STOP & SIMPAN bila sudah cukup';
+    $('livebox').style.display = '';
+    $('lvel').textContent = Math.floor(info.elapsed/60) + ':' +
+      String(Math.floor(info.elapsed%60)).padStart(2,'0');
+    $('lvmsg').textContent = info.n_msg.toLocaleString('id-ID');
+    $('lvbyte').textContent = fmt(info.n_bytes);
+    $('lvpcap').textContent = fmt(info.pcap_size);
+    $('sesstatus').innerHTML = `<div class="run"><span class="recdot"></span>
+      merekam ke <b class="mono">${esc(info.pcap_name)}</b> dan
+      <b class="mono">${esc(info.csv_name)}</b> (CSV ditulis saat berhenti)</div>`;
+    const devs = Object.entries(info.devices || {});
+    $('lvdev').innerHTML = devs.map(([d, v]) => `
+      <tr><td class="mono">${esc(d)}</td><td>${v.n.toLocaleString('id-ID')}</td>
+          <td>${fmt(v.bytes)}</td></tr>`).join('')
+      || '<tr><td colspan="3" class="empty">menunggu pesan…</td></tr>';
+  } else {
+    b.className = 'banner MENUNGGU';
+    $('sesmsg').textContent = 'Perekam Sesi — PCAP + Dataset CSV berlabel, tanpa perlu Wireshark/tshark';
+    $('sessub').textContent = 'perekam mandiri dari sisi broker';
+    $('livebox').style.display = 'none';
+    if(info === null && (j.history||[]).length){
+      const h = j.history[0];
+      $('sesstatus').innerHTML = `Sesi terakhir: <b>${esc(h.label)}</b> —
+        <span class="pill ok">${esc(h.status||'selesai')}</span> ·
+        ${h.n_msg.toLocaleString('id-ID')} pesan · PCAP ${fmt(h.pcap_size)} ·
+        ${h.csv_rows!=null ? h.csv_rows+' baris CSV' : ''} ${h.start_str?'· '+esc(h.start_str):''}`;
+    }
+  }
+  const hist = j.history || [];
+  if(hist.length){
+    $('seshist').querySelector('tbody').innerHTML = hist.map(h => `
+      <tr><td class="mono">${esc(h.start_str||'')}</td>
+          <td><b>${esc(h.label)}</b></td>
+          <td>${h.n_msg.toLocaleString('id-ID')}</td>
+          <td class="mono">${fmt(h.pcap_size)}</td>
+          <td class="mono">${h.csv_name ? esc(h.csv_name) : '–'}</td>
+          <td><span class="pill ok">${esc(h.status||'selesai')}</span></td></tr>`).join('');
+  }
+  const files = j.files || [];
+  $('files').querySelector('tbody').innerHTML = files.map(f => `
+    <tr><td class="mono">${esc(f.rel)}</td>
+        <td><span class="badge">${f.kind === 'pcap' ? 'PCAP' : 'CSV'}</span></td>
+        <td class="mono">${fmt(f.size)}</td>
+        <td class="mono">${f.rows !== '' ? f.rows : '–'}</td>
+        <td class="mono">${new Date(f.mtime*1000).toLocaleString('id-ID')}</td>
+        <td><a class="btn small" href="/api/session/download?rel=${encodeURIComponent(f.rel)}">Unduh</a></td>
+    </tr>`).join('') || '<tr><td colspan="6" class="empty">belum ada berkas — rekam sesi pertama Anda</td></tr>';
+}
+
+async function tick(){
+  try{
+    const r = await jfetch('/api/session/status');
+    renderStatus(await r.json());
+  }catch(e){}
+}
+tick();
+setInterval(tick, 2000);
+</script>
+{% endblock %}

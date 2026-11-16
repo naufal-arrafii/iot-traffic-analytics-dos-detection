@@ -1,0 +1,2 @@
+waktu,host,qos,rate,size,durasi,terkirim,diterima,loss_pct,lat_avg_ms,lat_min_ms,lat_max_ms,throughput_msgs,throughput_kbps
+2026-11-01 15:45:27,127.0.0.1,0,100.0,4096,31.0,2897,2847,1.73,10.9,0.4,33.4,91.8,367.3

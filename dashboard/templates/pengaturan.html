@@ -1,0 +1,283 @@
+{% extends "base.html" %}
+{% block title %}Pengaturan — MINT Dashboard{% endblock %}
+{% block content %}
+
+<h2 class="sec">Threshold Deteksi (Live)</h2>
+<div class="panel">
+  <p style="font-size:13px;color:var(--muted);line-height:1.6;margin-bottom:14px">
+    Threshold dihitung otomatis dari baseline:
+    <b>median + k&middot;1,4826&middot;MAD</b> (k=3) per node per metrik.
+    Nilai di bawah bisa Anda ubah manual — setelah <b>SIMPAN</b>, perubahan
+    <b>langsung berlaku tanpa restart</b>: status node, garis threshold pada
+    grafik (PPS / B/s / ukuran paket), dan warna kartu node akan mengikuti
+    dalam 1&ndash;2 detik.
+    {% if role != 'admin' %}<span style="color:var(--amber)">Hanya admin yang dapat
+    menyimpan perubahan.</span>{% endif %}
+  </p>
+  <div class="tscroll">
+    <table id="thrtab">
+      <thead><tr><th>Node</th><th>Metrik</th><th>Threshold</th>
+        <th>Nilai live (15 dtk)</th><th>Kalibrasi asal</th><th>Status</th></tr></thead>
+      <tbody><tr><td colspan="6" class="empty">memuat…</td></tr></tbody>
+    </table>
+  </div>
+  <div class="btnrow">
+    <button class="btn primary" id="btnThrSave" onclick="simpanThr()" {% if role != 'admin' %}disabled{% endif %}>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+      SIMPAN &amp; BERLAKAN LANGSUNG</button>
+    <button class="btn" id="btnThrReset" onclick="resetThr()" {% if role != 'admin' %}disabled{% endif %}>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+      Kalibrasi ulang dari BASE</button>
+    <span class="msg" id="thrmsg"></span>
+  </div>
+  <div class="hint" id="thrinfo">–</div>
+</div>
+
+<h2 class="sec">Akun</h2>
+<div class="panel">
+  <form id="pwform" style="max-width:420px">
+    <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+    <label class="flabel">Kata sandi lama</label>
+    <input type="password" name="lama" required autocomplete="current-password">
+    <label class="flabel">Kata sandi baru (minimal 6 karakter)</label>
+    <input type="password" name="baru" required autocomplete="new-password">
+    <label class="flabel">Konfirmasi kata sandi baru</label>
+    <input type="password" name="konfirmasi" required autocomplete="new-password">
+    <button type="submit" class="btn primary" style="margin-top:14px">Ganti Kata Sandi</button>
+  </form>
+  <div class="msg" id="pwmsg"></div>
+</div>
+
+<h2 class="sec">Notifikasi Telegram</h2>
+<div class="panel">
+  <div class="tgrid">
+    <div>
+      <div class="hrow"><span>Bot Telegram</span><span id="tgstat">–</span></div>
+      <form id="tgform" style="margin-top:12px">
+        <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+        <label class="flabel">Token Bot (dari @BotFather)</label>
+        <input type="password" name="token" placeholder="123456789:AAXxx…" autocomplete="off">
+        <label class="flabel">Chat ID penerima (angka; minus untuk grup)</label>
+        <input type="text" name="chat_id" placeholder="mis. 987654321" autocomplete="off">
+        <button type="submit" class="btn primary" style="margin-top:14px">Simpan &amp; Aktifkan Bot</button>
+      </form>
+      <div class="msg" id="tgcfgmsg"></div>
+    </div>
+    <div>
+      <div class="hrow"><span>Kirim pesan uji</span>
+        <button class="btn small" id="btnTg">Kirim Pesan Tes</button></div>
+      <div class="msg" id="tgmsg"></div>
+      <div class="hint">Alert PPS+BPS per perangkat digabung menjadi satu pesan;
+        pesan pemulihan (RECOVERY) juga dikirim.</div>
+    </div>
+  </div>
+</div>
+
+<h2 class="sec">Tentang Sistem</h2>
+<div class="panel">
+  <div class="kv" id="about">
+    <span class="k">Versi</span><span class="v">MINT v9.2.5</span>
+    <span class="k">Pengguna</span><span class="v">{{ user }} ({{ role }})</span>
+    <span class="k">Broker</span><span class="v" id="abroker">–</span>
+    <span class="k">Login</span><span class="v">{{ session.get('login_at','–') if session.get('login_at') else '–' }} · auto-logout 30 menit idle</span>
+  </div>
+</div>
+
+<style>
+  .flabel{display:block;font-size:12px;font-weight:600;color:var(--muted);margin:12px 0 5px}
+  .panel input{width:100%;max-width:420px;padding:10px 12px;background:var(--input-bg);
+        color:var(--text);border:1px solid var(--input-line);border-radius:8px;
+        font-size:13.5px;outline:none}
+  .panel input:focus{border-color:var(--cyan)}
+  .btnrow{display:flex;gap:10px;align-items:center;margin-top:16px;flex-wrap:wrap}
+  .hint{font-size:11.5px;color:var(--muted);margin-top:10px;line-height:1.55}
+  .mono{font-family:Consolas,monospace;font-size:12px}
+  input.thrinput{width:130px !important;padding:7px 10px !important;font-family:Consolas,monospace}
+  .hrow{display:flex;justify-content:space-between;align-items:center;gap:10px;
+        border-bottom:1px solid var(--line);padding:9px 2px;font-size:13px}
+  .hrow:last-child{border-bottom:none}
+  .tgrid{display:grid;grid-template-columns:1fr 1fr;gap:0 20px}
+  @media(max-width:860px){.tgrid{grid-template-columns:1fr}}
+  .numcell{font-family:Consolas,monospace}
+  .hot{color:var(--red);font-weight:700}
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script>
+/* ============================ THRESHOLD LIVE (v9.2.5) ============================ */
+const METRIK = {pps: 'PPS (pesan/dtk)', bps: 'BPS (byte/dtk)',
+                avg_pkt_size: 'Ukuran payload (byte)'};
+let THRDATA = null;
+
+async function muatThr(){
+  try{
+    const r = await jfetch('/api/thresholds');
+    const j = await r.json();
+    THRDATA = j;
+    const devs = (j.thresholds || {}).devices || {};
+    const live = j.live || {};
+    const reg = Object.values((window._mintState || {}).nodes || {})
+      .filter(n => n.registered);
+    const namaNode = {};
+    reg.forEach(n => namaNode[n.ip] = `${n.name} · ${n.sensor}`);
+    const rows = [];
+    Object.keys(devs).sort().forEach(ip => {
+      const lv = live[ip] || {};
+      const st = (window._mintState || {}).nodes || {};
+      const nodeInfo = st[ip] || {};
+      Object.keys(METRIK).forEach(m => {
+        const slot = devs[ip][m] || {};
+        const thr = slot.threshold;
+        const val = lv[m] != null ? lv[m] : null;
+        const hot = (thr && val != null && val > thr);
+        rows.push(`
+          <tr>
+            <td><b>${esc(namaNode[ip] || ip)}</b><br>
+                <span class="mono" style="color:var(--muted)">${esc(ip)}</span></td>
+            <td>${METRIK[m]}${slot.median != null
+                ? `<br><span style="color:var(--muted);font-size:11px">median ${fmt(slot.median)}</span>` : ''}</td>
+            <td><input class="thrinput" name="thr_${ip.replace(/\./g,'-')}_${m}"
+                       value="${thr ?? ''}" ${role_admin ? '' : 'disabled'}></td>
+            <td class="numcell ${hot ? 'hot' : ''}">${val != null
+                ? (m === 'pps' ? Math.round(val*10)/10 : fmt(val)) : '–'}</td>
+            <td class="mono" style="color:var(--muted)">${slot.manual
+                ? 'manual' : (slot.median != null ? 'kalibrasi BASE' : '–')}</td>
+            <td>${nodeInfo.status === 'ALERT'
+                ? '<span class="pill alert">ALERT</span>'
+                : (val != null ? '<span class="pill ok">OK</span>' : '<span class="pill off">–</span>')}</td>
+          </tr>`);
+      });
+    });
+    $('thrtab').querySelector('tbody').innerHTML = rows.join('')
+      || '<tr><td colspan="6" class="empty">thresholds.json belum terkalibrasi — rekam sesi BASE lalu tekan "Kalibrasi ulang dari BASE"</td></tr>';
+    const t = j.thresholds || {};
+    $('thrinfo').innerHTML =
+      `Sumber: <b>${esc((t.source_csv||[]).join(', ') || 'belum ada')}</b> · ` +
+      `${t.n_windows ?? 0} window · k=${(t.params||{}).k ?? 3} · ` +
+      (t.manual ? `<span style="color:var(--amber)">pernah diubah manual ${esc(t.manual_ts||'')}</span> · ` : '') +
+      `recovery ${(t.params||{}).recovery_s ?? 60} dtk · cooldown ${(t.params||{}).cooldown_s ?? 30} dtk`;
+    $('abroker').textContent = (j.broker_ip || '–') + ':1883';
+  }catch(e){ /* coba lagi di tick berikutnya */ }
+}
+
+const role_admin = {{ 'true' if role == 'admin' else 'false' }};
+
+async function simpanThr(){
+  const msg = $('thrmsg');
+  if(!role_admin){ msg.className='msg err'; msg.textContent='Hanya admin.'; return; }
+  msg.className = 'msg info'; msg.textContent = 'Menyimpan & menerapkan…';
+  const inputs = document.querySelectorAll('.thrinput');
+  const body = new URLSearchParams({_csrf: CSRF});
+  inputs.forEach(i => body.append(i.name, i.value));
+  try{
+    const r = await jfetch('/api/thresholds', {method: 'POST', body});
+    const j = await r.json();
+    msg.className = 'msg ' + (j.ok ? 'ok' : 'err');
+    msg.textContent = j.msg || '';
+    if(j.ok) muatThr();
+  }catch(e){ msg.className = 'msg err'; msg.textContent = 'Tidak dapat menghubungi server.'; }
+}
+
+async function resetThr(){
+  const msg = $('thrmsg');
+  if(!role_admin){ msg.className='msg err'; msg.textContent='Hanya admin.'; return; }
+  if(!confirm('Threshold semua node akan dihitung ulang dari data/dataset_BASE.csv ' +
+              '(median + 3·1,4826·MAD). Perubahan manual hilang. Lanjutkan?')) return;
+  msg.className = 'msg info'; msg.textContent = 'Mengkalibrasi ulang…';
+  try{
+    const r = await jfetch('/api/thresholds/reset', {
+      method: 'POST', body: new URLSearchParams({_csrf: CSRF})});
+    const j = await r.json();
+    msg.className = 'msg ' + (j.ok ? 'ok' : 'err');
+    msg.textContent = j.msg || '';
+    if(j.ok) muatThr();
+  }catch(e){ msg.className = 'msg err'; msg.textContent = 'Tidak dapat menghubungi server.'; }
+}
+
+/* ============================ FORM AKUN & TELEGRAM ============================ */
+$('pwform').addEventListener('submit', async e => {
+  e.preventDefault();
+  const msg = $('pwmsg');
+  msg.className = 'msg info'; msg.textContent = 'Menyimpan…';
+  try{
+    const r = await jfetch('/api/change_password', {
+      method: 'POST',
+      body: new URLSearchParams(new FormData($('pwform')))
+    });
+    const j = await r.json();
+    msg.className = 'msg ' + (j.ok ? 'ok' : 'err');
+    msg.textContent = j.msg || (j.ok ? 'Berhasil.' : 'Gagal.');
+    if(j.ok) $('pwform').reset();
+  }catch(err){
+    if(err.message !== '401'){
+      msg.className = 'msg err'; msg.textContent = 'Tidak dapat menghubungi server.';
+    }
+  }
+});
+async function muatStatusTg(){
+  try{
+    const r = await jfetch('/api/telegram/config');
+    const j = await r.json();
+    const el = $('tgstat');
+    if(j.ok){
+      el.innerHTML = j.aktif
+        ? '<span class="pill ok">AKTIF</span> ' + esc(j.token_masked || '')
+        : '<span class="pill off">BELUM DIPASANG</span>';
+      $('tgform').chat_id.placeholder = j.chat_id || 'mis. 987654321';
+    }else el.textContent = '–';
+  }catch(e){ /* abaikan */ }
+}
+$('tgform').addEventListener('submit', async e => {
+  e.preventDefault();
+  const msg = $('tgcfgmsg');
+  msg.className = 'msg info'; msg.textContent = 'Menyimpan & mengaktifkan bot…';
+  try{
+    const r = await jfetch('/api/telegram/config', {
+      method: 'POST',
+      body: new URLSearchParams(new FormData($('tgform')))
+    });
+    const j = await r.json();
+    msg.className = 'msg ' + (j.ok ? 'ok' : 'err');
+    msg.textContent = j.msg || '';
+    if(j.ok){ $('tgform').token.value = ''; muatStatusTg(); }
+  }catch(err){
+    if(err.message !== '401'){
+      msg.className = 'msg err'; msg.textContent = 'Tidak dapat menghubungi server.';
+    }
+  }
+});
+$('btnTg').addEventListener('click', async () => {
+  const msg = $('tgmsg');
+  msg.className = 'msg info'; msg.textContent = 'Mengirim…';
+  try{
+    const r = await jfetch('/api/telegram/test', {
+      method: 'POST', body: new URLSearchParams({_csrf: CSRF})
+    });
+    const j = await r.json();
+    msg.className = 'msg ' + (j.ok ? 'ok' : 'err');
+    msg.textContent = j.msg || '';
+  }catch(err){
+    if(err.message !== '401'){
+      msg.className = 'msg err'; msg.textContent = 'Tidak dapat menghubungi server.';
+    }
+  }
+});
+
+/* ============================ POLL ============================ */
+async function poll(){
+  // pastikan data node tersedia (pengawas alert base.html mengisinya tiap 4
+  // dtk; bila belum, ambil sendiri agar tabel threshold langsung terisi)
+  if(!window._mintState){
+    try{
+      const r = await jfetch('/api/state');
+      window._mintState = await r.json();
+    }catch(e){ return; }
+  }
+  muatThr();
+}
+muatStatusTg();
+poll();
+setInterval(poll, 5000);
+</script>
+{% endblock %}

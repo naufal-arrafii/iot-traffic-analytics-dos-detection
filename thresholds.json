@@ -1,0 +1,149 @@
+{
+    "generated": true,
+    "source_csv": [
+        "/home/z/my-project/work/mint-v9/data/dataset_BASE.csv"
+    ],
+    "n_windows": 12,
+    "params": {
+        "k": 3.0,
+        "floors": {
+            "pps": 2.0,
+            "bps": 4096.0,
+            "avg_pkt_size": 4096.0
+        },
+        "cooldown_s": 30.0,
+        "recovery_s": 60.0,
+        "metrics": {
+            "pps": {
+                "lookback": 3,
+                "confirm": 2,
+                "override": 5.0
+            },
+            "bps": {
+                "lookback": 3,
+                "confirm": 2,
+                "override": 5.0
+            },
+            "avg_pkt_size": {
+                "lookback": 1,
+                "confirm": 1,
+                "override": 3.0
+            }
+        }
+    },
+    "devices": {
+        "192.168.7.102": {
+            "mac": "A4:CF:12:9A:07:02",
+            "pps": {
+                "median": 1.0,
+                "mad": 0.0,
+                "max_observed": 1.0,
+                "threshold": 2.5,
+                "k": 3.0,
+                "floor": 2.0
+            },
+            "bps": {
+                "median": 112.0,
+                "mad": 0.0,
+                "max_observed": 112.0,
+                "threshold": 4096.0,
+                "k": 3.0,
+                "floor": 4096.0
+            },
+            "avg_pkt_size": {
+                "median": 112.0,
+                "mad": 0.0,
+                "max_observed": 112.0,
+                "threshold": 4096.0,
+                "k": 3.0,
+                "floor": 4096.0
+            }
+        },
+        "192.168.7.103": {
+            "mac": "A4:CF:12:9A:07:03",
+            "pps": {
+                "median": 1.0,
+                "mad": 0.0,
+                "max_observed": 1.0,
+                "threshold": 2.5,
+                "k": 3.0,
+                "floor": 2.0
+            },
+            "bps": {
+                "median": 115.0,
+                "mad": 0.0,
+                "max_observed": 116.0,
+                "threshold": 4096.0,
+                "k": 3.0,
+                "floor": 4096.0
+            },
+            "avg_pkt_size": {
+                "median": 115.0,
+                "mad": 0.0,
+                "max_observed": 116.0,
+                "threshold": 4096.0,
+                "k": 3.0,
+                "floor": 4096.0
+            }
+        },
+        "192.168.7.104": {
+            "mac": "A4:CF:12:9A:07:04",
+            "pps": {
+                "median": 1.0,
+                "mad": 0.0,
+                "max_observed": 1.0,
+                "threshold": 2.5,
+                "k": 3.0,
+                "floor": 2.0
+            },
+            "bps": {
+                "median": 18101.0,
+                "mad": 609.0,
+                "max_observed": 18801.0,
+                "threshold": 20809.7,
+                "k": 3.0,
+                "floor": 4096.0
+            },
+            "avg_pkt_size": {
+                "median": 18101.0,
+                "mad": 609.0,
+                "max_observed": 18801.0,
+                "threshold": 20809.7,
+                "k": 3.0,
+                "floor": 4096.0
+            }
+        },
+        "192.168.7.105": {
+            "mac": "A4:CF:12:9A:07:05",
+            "pps": {
+                "median": 1.0,
+                "mad": 0.0,
+                "max_observed": 1.0,
+                "threshold": 2.5,
+                "k": 3.0,
+                "floor": 2.0
+            },
+            "bps": {
+                "median": 89.0,
+                "mad": 0.0,
+                "max_observed": 89.0,
+                "threshold": 4096.0,
+                "k": 3.0,
+                "floor": 4096.0
+            },
+            "avg_pkt_size": {
+                "median": 89.0,
+                "mad": 0.0,
+                "max_observed": 89.0,
+                "threshold": 4096.0,
+                "k": 3.0,
+                "floor": 4096.0
+            }
+        }
+    },
+    "global": {
+        "pps": 3.8,
+        "bps": 31214.6,
+        "avg_pkt_size": 31214.6
+    }
+}

@@ -1,0 +1,301 @@
+{% extends "base.html" %}
+{% block title %}Node — MINT Dashboard{% endblock %}
+{% block content %}
+
+<h2 class="sec">Node Terpasang
+  <a class="helpchip" href="/bantuan#node">Cara membaca halaman ini →</a>
+</h2>
+<p style="color:var(--muted);font-size:13px;margin:-6px 0 14px">
+  Nilai sensor diperbarui langsung dari broker MQTT (iot/#). Status kehadiran
+  digabung dari ping ICMP, pesan MQTT terakhir, dan trafik yang dilihat analyzer —
+  node yang benar-benar mati akan langsung tertandai <b>OFFLINE</b>.
+</p>
+<div class="nodegrid" id="nodegrid"><div class="empty">memuat…</div></div>
+
+<style>
+  .nodegrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(430px,1fr));gap:15px}
+  @media(max-width:520px){.nodegrid{grid-template-columns:1fr}}
+  .nd{background:var(--panel);border:1px solid var(--line);border-radius:13px;padding:17px;
+      transition:background .25s,border-color .25s}
+  .nd.alert{border-color:rgba(239,68,68,.55);box-shadow:0 0 0 1px rgba(239,68,68,.22)}
+  .nd.off{opacity:.62}
+  .nd .head{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-bottom:12px}
+  .nd .head b{font-size:16.5px}
+  .nd .head .sp{margin-left:auto;display:flex;gap:6px}
+  .livebox{display:grid;grid-template-columns:1fr 150px;gap:13px;align-items:stretch;
+           margin-bottom:12px}
+  .readings{display:flex;flex-direction:column;gap:9px;justify-content:center}
+  .rd{display:flex;align-items:baseline;gap:9px;background:var(--panel2);
+      border:1px solid var(--line);border-radius:10px;padding:10px 14px}
+  .rd .ic{width:30px;height:30px;border-radius:8px;background:var(--cyan-dim);
+          display:flex;align-items:center;justify-content:center;flex:none;align-self:center}
+  .rd .ic svg{width:16px;height:16px;color:var(--cyan)}
+  .rd .num{font-size:25px;font-weight:700;color:var(--cyan-strong);line-height:1.1}
+  .rd .unit{font-size:12.5px;color:var(--muted)}
+  .rd .lb{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.8px}
+  .rd .age{margin-left:auto;font-size:11px;color:var(--muted)}
+  .spark{background:var(--panel2);border:1px solid var(--line);border-radius:10px;
+         padding:8px;display:flex;flex-direction:column}
+  .spark canvas{width:100%;height:74px;display:block;flex:1}
+  .spark .sl{font-size:10.5px;color:var(--muted);text-align:center;margin-top:4px;
+             text-transform:uppercase;letter-spacing:.8px}
+  .photobox{position:relative;border-radius:11px;overflow:hidden;background:var(--panel2);
+            border:1px solid var(--line);margin-bottom:12px}
+  .photobox img{width:100%;aspect-ratio:4/3;object-fit:cover;display:block}
+  .photobox .live{position:absolute;top:9px;left:9px;background:rgba(220,38,38,.92);
+                  color:#fff;font-size:10px;font-weight:700;border-radius:99px;
+                  padding:2px 10px;letter-spacing:1px}
+  .photobox .meta{position:absolute;left:0;right:0;bottom:0;padding:20px 10px 8px;
+                  background:linear-gradient(transparent,rgba(0,0,0,.72));color:#dbe7f3;
+                  font-size:11px;display:flex;justify-content:space-between;gap:8px;
+                  flex-wrap:wrap}
+  .photobox .meta a{color:#7ee0f5}
+  .photobox .nocam{width:100%;aspect-ratio:4/3;display:flex;flex-direction:column;gap:6px;
+                   align-items:center;justify-content:center;color:var(--muted);font-size:12.5px}
+  .photobox .live{background:rgba(220,38,38,.92)}
+  .photobox .live.stale{background:rgba(100,116,139,.9)}
+  .phstrip{display:flex;gap:6px;overflow-x:auto;padding:8px 2px 2px}
+  .phstrip a{flex:0 0 auto;width:64px;height:48px;border-radius:7px;overflow:hidden;
+             border:2px solid transparent;position:relative;opacity:.75}
+  .phstrip a.cur{border-color:var(--cyan);opacity:1}
+  .phstrip img{width:100%;height:100%;object-fit:cover;display:block}
+  .phstrip .sq{position:absolute;right:2px;bottom:2px;background:rgba(0,0,0,.65);
+               color:#fff;font-size:9px;padding:0 4px;border-radius:4px}
+  .phwrap{background:var(--panel2);border:1px solid var(--line);border-radius:11px;
+          padding:6px;margin-bottom:12px}
+  .metrics{display:flex;gap:16px;font-size:12px;flex-wrap:wrap;margin-bottom:6px}
+  .metrics b{display:block;font-size:16px;color:var(--cyan-strong)}
+  .metrics span{color:var(--muted)}
+  .metrics .thr{color:var(--muted);font-size:10px}
+  details.ident{border-top:1px solid var(--line);margin-top:10px;padding-top:9px}
+  details.ident summary{cursor:pointer;font-size:12.5px;color:var(--muted);font-weight:600;
+                        user-select:none;list-style:none;display:flex;align-items:center;gap:7px}
+  details.ident summary::before{content:'▸';transition:.15s;color:var(--cyan)}
+  details.ident[open] summary::before{transform:rotate(90deg)}
+  .ev{margin-top:9px;border-left:3px solid var(--red);padding:2px 0 2px 10px;font-size:12px}
+  .ev.rec{border-left-color:var(--green)}
+  .ev .t{color:var(--muted);font-size:10.5px}
+  .nd .tagline{margin-top:8px}
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const ICONS = {
+  suhu:  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0z"/></svg>',
+  hum:   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/></svg>',
+  jarak: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 3H14M10 3H3M21 21h-7M10 21H3M7 8l4 4-4 4M17 8l-4 4 4 4"/></svg>',
+  cahaya:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>',
+  info:  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>',
+};
+function iconFor(label){
+  const l = (label||'').toLowerCase();
+  if(/suhu|temp/.test(l)) return ICONS.suhu;
+  if(/lembab|hum/.test(l)) return ICONS.hum;
+  if(/jarak|dist/.test(l)) return ICONS.jarak;
+  if(/cahaya|lux|light/.test(l)) return ICONS.cahaya;
+  return ICONS.info;
+}
+
+const PALETTE = ['#22d3ee','#f97316','#a78bfa','#34d399','#f472b6','#facc15','#60a5fa','#fb7185'];
+const colorOf = {}; let colorIdx = 0;
+function nodeColor(ip){
+  if(!colorOf[ip]) colorOf[ip] = PALETTE[colorIdx++ % PALETTE.length];
+  return colorOf[ip];
+}
+/* riwayat PPS per node utk sparkline (versi HALUS: spline+glow+gradient) */
+const ppsHist = {};          // ip -> [{t, pps}]
+const MAXPTS = 70;
+let sparkTick = 0;           // penanda animasi titik baru
+
+function drawSpark(ip){
+  const cv = document.getElementById('spark-' + ip);   // id apa pun aman utk getElementById
+  if(!cv) return;
+  const c = MINTS.prep(cv);
+  if(!c) return;
+  const {ctx, w, h} = c;
+  const arr = ppsHist[ip] || [];
+  if(arr.length < 2){
+    ctx.fillStyle = cssVar('--chart-text'); ctx.font = '10px Segoe UI';
+    ctx.fillText('menunggu data…', 8, h/2);
+    return;
+  }
+  let maxv = 1;
+  arr.forEach(p => { if(p.pps > maxv) maxv = p.pps; });
+  maxv = Math.max(Math.ceil(maxv*1.2), 3);
+  const X = i => 5 + (w-10) * i/(arr.length-1);
+  const Y = v => 6 + (h-12) * (1 - v/maxv);
+  ctx.lineWidth = 1;
+  ctx.strokeStyle = cssVar('--chart-grid');
+  [0.5,1].forEach(f => { const y = Y(maxv*f);
+    ctx.beginPath(); ctx.moveTo(5,y); ctx.lineTo(w-5,y); ctx.stroke(); });
+  const col = nodeColor(ip);
+  let ys = MINTS.ema(arr.map(p => Y(p.pps)), 0.6);   // nilai -> piksel
+  let xs = arr.map((_, i) => X(i));
+  // titik terakhir tumbuh mulus (ease-out 600ms)
+  const grow = MINTS.easeOut(Math.min((performance.now() - sparkTick)/600, 1));
+  if(grow < 1){
+    const yg = MINTS.lerp(ys[ys.length-2], ys[ys.length-1], grow);
+    ys[ys.length-1] = yg;
+  }
+  MINTS.fillUnder(ctx, xs, ys, h-4, col, 0.18);
+  MINTS.strokeGlow(ctx, xs, ys, col, 2);
+  MINTS.dot(ctx, xs[xs.length-1], ys[ys.length-1], col, performance.now()/1000, 2.5);
+}
+
+function readingRow(label, value, unit, age){
+  const num = (typeof value === 'number' && !Number.isInteger(value)) ? value.toFixed(1) : value;
+  return `
+    <div class="rd">
+      <span class="ic">${iconFor(label)}</span>
+      <div>
+        <div class="lb">${esc(label)}</div>
+        <div class="num">${esc(String(num))} <span class="unit">${esc(unit)}</span></div>
+      </div>
+      <span class="age">${ago(age)}</span>
+    </div>`;
+}
+
+function nodeDetail(n){
+  const on = n.presence === 'ONLINE';
+  const isCam = n.photo || /kamera|cam/i.test(n.sensor + n.topic);
+  let live;
+  if(isCam){
+    /* Foto tetap ditampilkan walau node sempat offline (badge TERAKHIR)
+       supaya kotak kamera tidak menghilang-hilang (anti flicker). */
+    const ph = n.photo;
+    if(ph){
+      const hist = (n.photo_history || []).slice().reverse();   // terbaru dulu
+      live = `
+    <div class="phwrap">
+    <div class="photobox">
+      <img id="photo-${esc(n.ip)}" alt="foto live ${esc(n.name)}"
+           src="/api/photo?topic=${encodeURIComponent(n.topic)}"
+           onerror="this.dataset.err=(+this.dataset.err||0)+1; if(this.dataset.err<5) setTimeout(()=>{this.src='/api/photo?topic=${encodeURIComponent(n.topic)}&t='+Date.now()},2000)">
+      ${on ? '<span class="live">LIVE</span>' : '<span class="live stale">TERAKHIR</span>'}
+      <div class="meta">
+        <span>foto ${ago(ph.age)} · ${fmt(ph.size)} · ke-${ph.count}</span>
+        <a href="/api/photo?topic=${encodeURIComponent(n.topic)}" target="_blank" rel="noopener">buka penuh</a>
+      </div>
+    </div>
+    ${hist.length > 1 ? `
+    <div class="phstrip" title="riwayat ${hist.length} foto terakhir">
+      ${hist.map(h => `
+        <a class="${h.seq===ph.count?'cur':''}" target="_blank" rel="noopener"
+           href="/api/photo?topic=${encodeURIComponent(n.topic)}&seq=${h.seq}">
+          <img loading="lazy" src="/api/photo?topic=${encodeURIComponent(n.topic)}&seq=${h.seq}" alt="ke-${h.seq}">
+          <span class="sq">${h.seq}</span>
+        </a>`).join('')}
+    </div>` : ''}
+    </div>`;
+    } else {
+      live = `
+    <div class="photobox">
+      <div class="nocam">
+        <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+             stroke-width="2" style="color:var(--muted)"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+        <span>${on ? 'menunggu foto pertama…' : 'kamera offline — belum ada foto'}</span>
+      </div>
+    </div>`;
+    }
+  } else if(n.readings && n.readings.items){
+    live = `<div class="readings">` + n.readings.items.map(r =>
+             readingRow(r.label, r.value, r.unit, n.readings.age)).join('') + `</div>`;
+  } else if(n.readings && n.readings.text){
+    live = `<div class="readings"><div class="rd"><span class="ic">${ICONS.info}</span>
+            <div><div class="lb">Payload terakhir</div>
+            <div class="num" style="font-size:14px;word-break:break-all">${esc(n.readings.text)}</div></div>
+            <span class="age">${ago(n.readings.age)}</span></div></div>`;
+  } else {
+    live = `<div class="readings"><div class="rd"><span class="ic">${ICONS.info}</span>
+            <div><div class="lb">Status data</div>
+            <div class="num" style="font-size:14px">${on?'menunggu payload sensor…':'node offline'}</div></div>
+            </div></div>`;
+  }
+
+  const ev = n.events.slice(-3).reverse().map(a => `
+    <div class="ev ${a.kind==='RECOVERY'?'rec':''}">
+      <div class="t">${esc(a.time)}</div>
+      <b>${esc(a.kind)}</b> ${esc(a.type)} — ${esc(a.metric)} = ${fmt(a.value)} (thr ${fmt(a.threshold)}, ${a.ratio}x)
+    </div>`).join('');
+
+  return `
+  <div class="nd ${n.status==='ALERT'?'alert':(on?'':'off')}">
+    <div class="head">
+      <b>${esc(n.name)}</b>
+      <span class="badge">${esc(n.sensor)}</span>
+      ${n.registered ? '' : '<span class="badge warn">TAK TERDAFTAR</span>'}
+      <span class="sp">
+        <span class="pill ${on?'ok':'off'}">${on ? 'TERHUBUNG' : 'OFFLINE'}</span>
+        ${n.status==='ALERT' ? '<span class="pill alert">ALERT</span>' : ''}
+      </span>
+    </div>
+    <div class="livebox" style="${isCam ? 'grid-template-columns:1fr' : ''}">
+      ${isCam ? '' : live}
+      <div class="spark">
+        <canvas id="spark-${esc(n.ip)}"></canvas>
+        <div class="sl">PPS 15 dtk terakhir</div>
+      </div>
+    </div>
+    ${isCam ? live : ''}
+    <div class="metrics">
+      <div><b>${(n.pps_15s||0).toLocaleString('id-ID',{maximumFractionDigits:2})}</b><span>PPS${n.thresholds.pps?' <span class="thr">thr '+n.thresholds.pps+'</span>':''}</span></div>
+      <div><b>${fmt(n.bps_15s)}/s</b><span>BPS${n.thresholds.bps?' <span class="thr">thr '+fmt(n.thresholds.bps)+'</span>':''}</span></div>
+      <div><b>${fmt(n.avg_pkt_size_15s)}</b><span>avg pkt${n.thresholds.avg_pkt_size?' <span class="thr">thr '+fmt(n.thresholds.avg_pkt_size)+'</span>':''}</span></div>
+      <div><b>${n.total_publish||0}</b><span>total pesan</span></div>
+    </div>
+    ${n.alerts && n.alerts.length ? `<div class="tagline"><span class="tag">⚠ ${n.alerts.map(esc).join(', ')}</span></div>` : ''}
+    <details class="ident">
+      <summary>Identitas &amp; konfigurasi node</summary>
+      <div class="kv" style="margin-top:9px">
+        <span class="k">IP</span><span class="v">${esc(n.ip)}</span>
+        <span class="k">MAC</span><span class="v">${esc(n.mac)}</span>
+        <span class="k">Topik MQTT</span><span class="v">${esc(n.topic)}</span>
+        <span class="k">Interval</span><span class="v">${n.interval_s ? n.interval_s+' detik' : '–'}</span>
+        <span class="k">Lokasi</span><span class="v">${esc(n.location)}</span>
+        <span class="k">PIC</span><span class="v">${esc(n.owner)}</span>
+        <span class="k">Terdeteksi analyzer</span><span class="v">${n.first_seen ? new Date(n.first_seen*1000).toLocaleTimeString('id-ID',{hour12:false}) : '–'}</span>
+        <span class="k">Sumber status</span><span class="v">${n.presence_src ? 'bukti '+esc(n.presence_src) : 'tidak ada bukti kehadiran'}</span>
+      </div>
+    </details>
+    ${ev ? '<div style="margin-top:10px">'+ev+'</div>' : ''}
+  </div>`;
+}
+
+async function tick(){
+  try{
+    const r = await jfetch('/api/state');
+    const s = await r.json();
+    const nodes = Object.values(s.nodes);
+    $('nodegrid').innerHTML = nodes.map(nodeDetail).join('')
+                           || '<div class="empty">belum ada node — cek devices.json</div>';
+    nodes.forEach(n => {
+      const arr = ppsHist[n.ip] = ppsHist[n.ip] || [];
+      arr.push({t: Date.now()/1000, pps: n.pps_15s||0});   // v9.2.5: 15 dtk — responsif
+      if(arr.length > MAXPTS) arr.shift();
+    });
+    sparkTick = performance.now();       // mulai animasi titik baru sparkline
+    nodes.forEach(n => drawSpark(n.ip));
+    window._setFooter(s);
+  }catch(e){ /* biarkan isi terakhir */ }
+}
+
+/* refresh foto live tiap 5 detik (hanya saat tab terlihat).
+   Foto lama dipakai ulang dari cache browser 3 detik — bukan diunduh
+   ulang dari nol — sehingga tidak berkedip saat DOM dibangun ulang. */
+setInterval(() => {
+  if(document.visibilityState !== 'visible') return;
+  document.querySelectorAll('.photobox > img').forEach(img => {
+    const base = img.src.split('&t=')[0];
+    img.src = base + '&t=' + Date.now();
+  });
+}, 5000);
+
+tick();
+setInterval(tick, 2000);
+/* sparkline digambar tiap frame: denyut halus + titik tumbuh — bukan lompatan */
+MINTS.rafLoop(() => {
+  Object.keys(ppsHist).forEach(drawSpark);
+});
+</script>
+{% endblock %}

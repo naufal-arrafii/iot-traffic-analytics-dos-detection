@@ -1,0 +1,149 @@
+{% extends "base.html" %}
+{% block title %}Server — MINT Dashboard{% endblock %}
+{% block content %}
+
+<h2 class="sec">Pemakaian Server
+  <a class="helpchip" href="/bantuan#faq">Server bermasalah? →</a>
+</h2>
+<p style="color:var(--muted);font-size:13px;margin:-6px 0 14px">
+  Sumber daya mesin tempat dashboard &amp; Docker stack berjalan, status layanan
+  pendukung, dan log sistem internal.
+</p>
+
+<div class="srv">
+  <div class="panel">
+    <h3>Sumber Daya</h3>
+    <div id="resbox">
+      <div class="mrow">
+        <div class="head"><span>CPU</span><b id="cpuv">–</b></div>
+        <div class="bar"><i id="cpub"></i></div>
+        <div class="sub" id="cpus"></div>
+      </div>
+      <div class="mrow">
+        <div class="head"><span>RAM</span><b id="ramv">–</b></div>
+        <div class="bar"><i id="ramb"></i></div>
+        <div class="sub" id="rams"></div>
+      </div>
+      <div class="mrow">
+        <div class="head"><span>Disk (partisi proyek)</span><b id="dkv">–</b></div>
+        <div class="bar"><i id="dkb"></i></div>
+        <div class="sub" id="dks"></div>
+      </div>
+      <div class="netrow">
+        <span>Jaringan naik <b id="netup">–</b> <span id="netupt">()</span></span>
+        <span>turun <b id="netdn">–</b> <span id="netdnt">()</span></span>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h3>Identitas &amp; Layanan</h3>
+    <div class="kv">
+      <span class="k">Hostname</span><span class="v" id="svhost">–</span>
+      <span class="k">Sistem operasi</span><span class="v" id="svos">–</span>
+      <span class="k">Python</span><span class="v" id="svpy">–</span>
+      <span class="k">Broker MQTT</span><span class="v" id="svbroker">–</span>
+      <span class="k">Uptime server</span><span class="v" id="svup">–</span>
+      <span class="k">Uptime dashboard</span><span class="v" id="svdash">–</span>
+    </div>
+    <h3 style="margin-top:16px">Status Layanan</h3>
+    <div class="svc" id="svc"></div>
+    <h3 style="margin-top:16px">Kehadiran Node (ping)</h3>
+    <div class="svc" id="pingsvc"></div>
+  </div>
+
+  <div class="panel full">
+    <h3>Log Sistem</h3>
+    <div class="syslog" id="syslog">–</div>
+  </div>
+</div>
+
+<style>
+  .srv{display:grid;grid-template-columns:1.15fr 1fr;gap:15px}
+  @media(max-width:920px){.srv{grid-template-columns:1fr}}
+  .srv .full{grid-column:1/-1}
+  .mrow{margin-bottom:14px}
+  .mrow .head{display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:5px}
+  .mrow .head b{font-size:14px}
+  .mrow .sub{color:var(--muted);font-size:11px;margin-top:4px}
+  .bar{height:8px;background:var(--panel2);border:1px solid var(--line);
+       border-radius:99px;overflow:hidden}
+  .bar i{display:block;height:100%;width:0;background:var(--cyan);transition:width .5s}
+  .bar i.warn{background:var(--amber)} .bar i.bad{background:var(--red)}
+  .netrow{display:flex;gap:18px;flex-wrap:wrap;margin-top:4px;font-size:12.5px}
+  .netrow b{color:var(--cyan-strong)}
+  .netrow span{color:var(--muted)}
+  .svc{display:flex;flex-wrap:wrap;gap:8px;margin-top:4px}
+  .svc .s{display:flex;align-items:center;gap:7px;background:var(--panel2);
+          border:1px solid var(--line);border-radius:99px;padding:5px 12px;font-size:12px}
+  .svc .s .st{width:8px;height:8px;border-radius:50%;flex:none}
+  .svc .s.on{color:var(--green)} .svc .s.on .st{background:var(--green)}
+  .svc .s.down{color:var(--red)} .svc .s.down .st{background:var(--red)}
+  .syslog{font-family:Consolas,monospace;font-size:11.5px;line-height:1.8;
+          color:var(--muted);max-height:220px;overflow-y:auto;
+          background:var(--panel2);border:1px solid var(--line);border-radius:9px;
+          padding:10px 13px}
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function setBar(barId, valId, pct, subId, sub){
+  const cls = pct >= 85 ? 'bad' : pct >= 60 ? 'warn' : '';
+  const bar = $(barId);
+  bar.className = cls; bar.style.width = Math.min(pct,100) + '%';
+  $(valId).textContent = pct.toFixed(0) + '%';
+  if(subId) $(subId).textContent = sub || '';
+}
+async function tickSrv(){
+  try{
+    const r = await jfetch('/api/server');
+    const s = await r.json();
+    $('svhost').textContent = s.hostname;
+    $('svos').textContent = s.os;
+    $('svpy').textContent = s.python + (s.psutil ? '' : ' (tanpa psutil)');
+    $('svbroker').textContent = s.broker_ip + ':1883';
+    $('svup').textContent = s.boot_ts ? uptimeFmt(Date.now()/1000 - s.boot_ts) : '–';
+    $('svdash').textContent = uptimeFmt(s.dashboard_uptime);
+    if(s.psutil){
+      setBar('cpub','cpuv', s.cpu_percent, 'cpus', (s.cpu_cores||1) + ' inti CPU');
+      setBar('ramb','ramv', s.ram_percent, 'rams',
+             fmt(s.ram_used) + ' dari ' + fmt(s.ram_total));
+      setBar('dkb','dkv', s.disk_percent, 'dks',
+             fmt(s.disk_used) + ' dari ' + fmt(s.disk_total));
+      $('netup').textContent = fmtRate(s.net_up_bps);
+      $('netupt').textContent = 'total ' + fmt(s.net_sent);
+      $('netdn').textContent = fmtRate(s.net_down_bps);
+      $('netdnt').textContent = 'total ' + fmt(s.net_recv);
+    }else{
+      $('resbox').innerHTML =
+        '<div class="msg info">Metrik CPU/RAM/disk membutuhkan paket psutil.<br>'+
+        'Pasang dengan: <b>pip install psutil</b> lalu jalankan ulang dashboard.</div>';
+    }
+    const out = [];
+    Object.entries(s.services || {}).forEach(([name, v]) => {
+      out.push(`<span class="s ${v.ok?'on':'down'}"><span class="st"></span>${esc(name)}</span>`);
+    });
+    if(s.mqtt_cache){
+      out.push(`<span class="s ${s.mqtt_cache.connected?'on':'down'}"><span class="st"></span>MQTT cache (${s.mqtt_cache.rx_count} pesan)</span>`);
+    }
+    $('svc').innerHTML = out.join('') ||
+      '<span class="s down"><span class="st"></span>memeriksa…</span>';
+
+    const pings = [];
+    Object.entries(s.ping && s.ping.nodes || {}).forEach(([ip, ok]) => {
+      pings.push(`<span class="s ${ok?'on':'down'}"><span class="st"></span>${esc(ip)}</span>`);
+    });
+    $('pingsvc').innerHTML = pings.join('') ||
+      '<span class="s down"><span class="st"></span>tidak ada node terdaftar</span>';
+
+    $('syslog').innerHTML = (s.syslog||[]).map(esc).join('<br>') || '–';
+    $('updated').textContent = 'Panel server diperbarui: ' +
+      new Date().toLocaleTimeString('id-ID',{hour12:false});
+    $('broker').textContent = s.broker_ip + ':1883';
+  }catch(e){ /* panel dibiarkan */ }
+}
+tickSrv();
+setInterval(tickSrv, 5000);
+</script>
+{% endblock %}

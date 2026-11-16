@@ -1,0 +1,12 @@
+# Provisioning dashboard MINT
+apiVersion: 1
+
+providers:
+  - name: MINT
+    folder: MINT
+    type: file
+    disableDeletion: false
+    allowUiUpdates: true
+    updateIntervalSeconds: 10
+    options:
+      path: /etc/grafana/provisioning/dashboards

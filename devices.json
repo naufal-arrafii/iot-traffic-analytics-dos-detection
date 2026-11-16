@@ -1,0 +1,45 @@
+{
+  "broker_ip": "192.168.7.101",
+  "nodes": [
+    {
+      "ip": "192.168.7.102",
+      "mac": "A4:CF:12:9A:07:02",
+      "name": "ESP32-1",
+      "sensor": "DHT22",
+      "location": "Ruang Server",
+      "topic": "iot/suhu",
+      "interval_s": 10,
+      "owner": "Faizul"
+    },
+    {
+      "ip": "192.168.7.103",
+      "mac": "A4:CF:12:9A:07:03",
+      "name": "ESP32-2",
+      "sensor": "HC-SR04",
+      "location": "Pintu Utama",
+      "topic": "iot/jarak",
+      "interval_s": 10,
+      "owner": "Faizul"
+    },
+    {
+      "ip": "192.168.7.104",
+      "mac": "A4:CF:12:9A:07:04",
+      "name": "ESP32-3",
+      "sensor": "ESP32-CAM",
+      "location": "Koridor",
+      "topic": "iot/kamera",
+      "interval_s": 10,
+      "owner": "Faizul"
+    },
+    {
+      "ip": "192.168.7.105",
+      "mac": "A4:CF:12:9A:07:05",
+      "name": "ESP32-4",
+      "sensor": "BH1750",
+      "location": "Ruang Lab",
+      "topic": "iot/cahaya",
+      "interval_s": 10,
+      "owner": "Faizul"
+    }
+  ]
+}

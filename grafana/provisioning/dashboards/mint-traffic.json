@@ -1,0 +1,1669 @@
+{
+  "id": null,
+  "uid": "mint-traffic",
+  "title": "MINT - Traffic Monitor (perbandingan)",
+  "tags": [
+    "mint",
+    "v9.2.6"
+  ],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "editable": true,
+  "graphTooltip": 1,
+  "refresh": "2s",
+  "time": {
+    "from": "now-5m",
+    "to": "now"
+  },
+  "timepicker": {
+    "refresh_intervals": [
+      "1s",
+      "2s",
+      "5s",
+      "10s",
+      "30s"
+    ]
+  },
+  "description": "MINT v9.2.6 — metrik 15 dtk, threshold, baseline, dan rasio per node: angka SAMA dengan halaman Grafik PPS di web dashboard sehingga keduanya bisa dibandingkan langsung.",
+  "templating": {
+    "list": [
+      {
+        "name": "node",
+        "label": "Node",
+        "type": "query",
+        "datasource": {
+          "type": "influxdb",
+          "uid": "influxdb-mint"
+        },
+        "refresh": 2,
+        "multi": true,
+        "includeAll": true,
+        "current": {
+          "selected": true,
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        },
+        "sort": 1,
+        "query": "import \"influxdata/influxdb/schema\"\nschema.tagValues(bucket: \"traffic\", tag: \"node\", start: -24h)"
+      },
+      {
+        "name": "shift",
+        "label": "Bandingkan dengan",
+        "type": "custom",
+        "query": "1m,5m,15m,1h",
+        "multi": false,
+        "includeAll": false,
+        "current": {
+          "selected": true,
+          "text": "5m",
+          "value": "5m"
+        },
+        "options": [
+          {
+            "selected": false,
+            "text": "1m",
+            "value": "1m"
+          },
+          {
+            "selected": true,
+            "text": "5m",
+            "value": "5m"
+          },
+          {
+            "selected": false,
+            "text": "15m",
+            "value": "15m"
+          },
+          {
+            "selected": false,
+            "text": "1h",
+            "value": "1h"
+          }
+        ]
+      }
+    ]
+  },
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "type": "dashboard",
+        "name": "Annotations & Alerts",
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)"
+      },
+      {
+        "name": "ALERT deteksi",
+        "enable": true,
+        "iconColor": "red",
+        "datasource": {
+          "type": "influxdb",
+          "uid": "influxdb-mint"
+        },
+        "target": {
+          "refId": "Anno",
+          "query": "from(bucket: \"traffic\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"alerts\" and r.kind == \"ALERT\" and r._field == \"value\")\n  |> map(fn: (r) => ({_time: r._time, _value: r.node + \" \" + r.metric + \" ALERT\"}))\n  |> keep(columns: [\"_time\", \"_value\"])"
+        }
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "row",
+      "title": "1 · Ringkasan sekarang",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "panels": []
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Status sistem",
+      "description": "SERANGAN bila ada node berstatus ALERT (sama dengan banner di web dashboard).",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "influxdb-mint"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 5,
+        "x": 0,
+        "y": 1
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "query": "from(bucket: \"traffic\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"traffic_metrics\" and r._field == \"alert\")\n  |> filter(fn: (r) => contains(value: r.node, set: ${node:json}))\n  |> last()\n  |> group()\n  |> sum()",
+          "datasource": {
+            "type": "influxdb",
+            "uid": "influxdb-mint"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          },
+          "mappings": [
+            {
+              "type": "range",
+              "options": {
+                "from": 0,
+                "to": 0,
+                "result": {
+                  "text": "NORMAL",
+                  "color": "green"
+                }
+              }
+            },
+            {
+              "type": "range",
+              "options": {
+                "from": 1,
+                "to": 99,
+                "result": {
+                  "text": "SERANGAN",
+                  "color": "red"
+                }
+              }
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "auto",
+        "justifyMode": "center",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      }
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Total PPS (15 dtk)",
+      "description": "Jumlah pesan/detik semua node, rata-rata bergerak 15 dtk — sama dengan kartu di web.",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "influxdb-mint"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 5,
+        "x": 5,
+        "y": 1
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "query": "from(bucket: \"traffic\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"traffic_metrics\" and r._field == \"pps_15s\")\n  |> filter(fn: (r) => contains(value: r.node, set: ${node:json}))\n  |> last()\n  |> group()\n  |> sum()",
+          "datasource": {
+            "type": "influxdb",
+            "uid": "influxdb-mint"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          },
+          "mappings": [],
+          "unit": "pps"
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "auto",
+        "justifyMode": "center",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      }
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Total B/s (15 dtk)",
+      "description": "Byte/detik semua node.",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "influxdb-mint"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 5,
+        "x": 10,
+        "y": 1
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "query": "from(bucket: \"traffic\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"traffic_metrics\" and r._field == \"bps_15s\")\n  |> filter(fn: (r) => contains(value: r.node, set: ${node:json}))\n  |> last()\n  |> group()\n  |> sum()",
+          "datasource": {
+            "type": "influxdb",
+            "uid": "influxdb-mint"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          },
+          "mappings": [],
+          "unit": "Bps"
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "auto",
+        "justifyMode": "center",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      }
+    },
+    {
+      "id": 5,
+      "type": "stat",
+      "title": "Skenario serangan aktif",
+      "description": "Skenario dari menu Serangan (S1–S4). 'none' = tidak ada uji berjalan.",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "influxdb-mint"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 15,
+        "y": 1
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "query": "from(bucket: \"traffic\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"attack\" and r._field == \"active\")\n  |> last()\n  |> map(fn: (r) => ({_time: r._time, _value: r.scenario}))",
+          "datasource": {
+            "type": "influxdb",
+            "uid": "influxdb-mint"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              }
+            ]
+          },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "none": {
+                  "text": "TENANG",
+                  "color": "green"
+                }
+              }
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      }
+    },
+    {
+      "id": 6,
+      "type": "stat",
+      "title": "Event ALERT (rentang waktu)",
+      "description": "Jumlah episode ALERT — hanya event ALERT (RECOVERY & field ganda tidak dihitung lagi).",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "influxdb-mint"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 5,
+        "x": 19,
+        "y": 1
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "query": "from(bucket: \"traffic\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"alerts\" and r._field == \"value\" and r.kind == \"ALERT\")\n  |> group()\n  |> count()",
+          "datasource": {
+            "type": "influxdb",
+            "uid": "influxdb-mint"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          },
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "auto",
+        "justifyMode": "center",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      }
+    },
+    {
+      "id": 7,
+      "type": "row",
+      "title": "2 · Perbandingan antar node (sekarang)",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 5
+      },
+      "panels": []
+    },
+    {
+      "id": 8,
+      "type": "table",
+      "title": "Tabel perbandingan node: sekarang vs normal vs threshold",
+      "description": "Satu baris per node. PPS normal = median baseline (data/dataset_BASE.csv). '÷ thr' ≥ 100% (merah) = melewati threshold. Angka sama dengan halaman Grafik PPS di web dashboard.",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "influxdb-mint"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 14,
+        "x": 0,
+        "y": 6
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "query": "from(bucket: \"traffic\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"traffic_metrics\" and contains(value: r._field, set: [\"pps_15s\",\"thr_pps\",\"base_pps\",\"ratio_pps\",\"bps_15s\",\"thr_bps\",\"ratio_bps\",\"avg_pkt_size_15s\",\"thr_avg_pkt_size\",\"ratio_avg_pkt_size\",\"alert\"]))\n  |> filter(fn: (r) => contains(value: r.node, set: ${node:json}))\n  |> last()\n  |> keep(columns: [\"node\", \"_field\", \"_value\"])\n  |> pivot(rowKey: [\"node\"], columnKey: [\"_field\"], valueColumn: \"_value\")\n  |> group()",
+          "datasource": {
+            "type": "influxdb",
+            "uid": "influxdb-mint"
+          }
+        }
+      ],
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "renameByName": {
+              "node": "Node",
+              "pps_15s": "PPS sekarang",
+              "thr_pps": "PPS threshold",
+              "base_pps": "PPS normal (baseline)",
+              "ratio_pps": "PPS ÷ thr",
+              "bps_15s": "B/s sekarang",
+              "thr_bps": "B/s threshold",
+              "ratio_bps": "B/s ÷ thr",
+              "avg_pkt_size_15s": "Ukuran paket sekarang",
+              "thr_avg_pkt_size": "Ukuran threshold",
+              "ratio_avg_pkt_size": "Ukuran ÷ thr",
+              "alert": "Status"
+            },
+            "indexByName": {
+              "Node": 0,
+              "PPS sekarang": 1,
+              "PPS threshold": 2,
+              "PPS normal (baseline)": 3,
+              "PPS ÷ thr": 4,
+              "B/s sekarang": 5,
+              "B/s threshold": 6,
+              "B/s ÷ thr": 7,
+              "Ukuran paket sekarang": 8,
+              "Ukuran threshold": 9,
+              "Ukuran ÷ thr": 10,
+              "Status": 11
+            }
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 2,
+          "custom": {
+            "align": "center"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "PPS ÷ thr"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "percentunit"
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background",
+                  "mode": "gradient"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "orange",
+                      "value": 0.7
+                    },
+                    {
+                      "color": "red",
+                      "value": 1
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "B/s ÷ thr"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "percentunit"
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background",
+                  "mode": "gradient"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "orange",
+                      "value": 0.7
+                    },
+                    {
+                      "color": "red",
+                      "value": 1
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Ukuran ÷ thr"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "percentunit"
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background",
+                  "mode": "gradient"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "orange",
+                      "value": 0.7
+                    },
+                    {
+                      "color": "red",
+                      "value": 1
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Status"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background"
+                }
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "0": {
+                        "text": "NORMAL",
+                        "color": "green"
+                      },
+                      "1": {
+                        "text": "ALERT",
+                        "color": "red"
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "B/s sekarang"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "Bps"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "B/s threshold"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "Bps"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Ukuran paket sekarang"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "bytes"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Ukuran threshold"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "bytes"
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "md"
+      }
+    },
+    {
+      "id": 9,
+      "type": "piechart",
+      "title": "Distribusi trafik per node (B/s, 15 dtk)",
+      "description": "Porsi byte/detik tiap node. Node kamera biasanya dominan; lonjakan node sensor kecil = anomali.",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "influxdb-mint"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 10,
+        "x": 14,
+        "y": 6
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "query": "from(bucket: \"traffic\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"traffic_metrics\" and r._field == \"bps_15s\")\n  |> filter(fn: (r) => contains(value: r.node, set: ${node:json}))\n  |> last()\n  |> keep(columns: [\"node\", \"_value\"])\n  |> group(columns: [\"node\"])",
+          "datasource": {
+            "type": "influxdb",
+            "uid": "influxdb-mint"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "Bps",
+          "displayName": "${__field.labels.node}"
+        },
+        "overrides": []
+      },
+      "options": {
+        "pieType": "donut",
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "values": [
+            "percent",
+            "value"
+          ]
+        },
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "tooltip": {
+          "mode": "single"
+        }
+      }
+    },
+    {
+      "id": 10,
+      "type": "bargauge",
+      "title": "Rasio terhadap threshold (100% = batas ALERT)",
+      "description": "Semua metrik semua node di satu skala: makin mendekati/melewati 100% makin anomali. Cara tercepat membandingkan node.",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "influxdb-mint"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 14
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "query": "from(bucket: \"traffic\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"traffic_metrics\" and contains(value: r._field, set: [\"ratio_pps\",\"ratio_bps\",\"ratio_avg_pkt_size\"]))\n  |> filter(fn: (r) => contains(value: r.node, set: ${node:json}))\n  |> last()\n  |> keep(columns: [\"node\", \"_field\", \"_value\"])\n  |> group(columns: [\"node\", \"_field\"])",
+          "datasource": {
+            "type": "influxdb",
+            "uid": "influxdb-mint"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1.5,
+          "displayName": "${__field.labels.node} · ${__field.labels._field}",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 0.7
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "orientation": "horizontal",
+        "displayMode": "gradient",
+        "showUnfilled": true,
+        "valueMode": "color",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      }
+    },
+    {
+      "id": 11,
+      "type": "row",
+      "title": "3 · Grafik realtime semua node (sama dengan halaman Grafik PPS)",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 22
+      },
+      "panels": []
+    },
+    {
+      "id": 12,
+      "type": "timeseries",
+      "title": "Packet rate per node (PPS, 15 dtk)",
+      "description": "Pesan PUBLISH per detik. Naik mendadak = indikasi S1/S2/S4.",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "influxdb-mint"
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 0,
+        "y": 23
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "query": "from(bucket: \"traffic\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"traffic_metrics\" and r._field == \"pps_15s\")\n  |> filter(fn: (r) => contains(value: r.node, set: ${node:json}))\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"node\"])",
+          "datasource": {
+            "type": "influxdb",
+            "uid": "influxdb-mint"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "pps",
+          "min": 0,
+          "displayName": "${__field.labels.node}",
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "fillOpacity": 12,
+            "showPoints": "never",
+            "spanNulls": true,
+            "gradientMode": "opacity"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 13,
+      "type": "timeseries",
+      "title": "Byte rate per node (B/s, 15 dtk)",
+      "description": "Volume data per detik.",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "influxdb-mint"
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 12,
+        "y": 23
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "query": "from(bucket: \"traffic\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"traffic_metrics\" and r._field == \"bps_15s\")\n  |> filter(fn: (r) => contains(value: r.node, set: ${node:json}))\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"node\"])",
+          "datasource": {
+            "type": "influxdb",
+            "uid": "influxdb-mint"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "Bps",
+          "min": 0,
+          "displayName": "${__field.labels.node}",
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "fillOpacity": 12,
+            "showPoints": "never",
+            "spanNulls": true,
+            "gradientMode": "opacity"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 14,
+      "type": "timeseries",
+      "title": "Ukuran paket rata-rata per node (B/pesan, 15 dtk)",
+      "description": "Node sensor kecil yang mendadak besar = indikasi S3 (payload abnormal).",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "influxdb-mint"
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 0,
+        "y": 32
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "query": "from(bucket: \"traffic\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"traffic_metrics\" and r._field == \"avg_pkt_size_15s\")\n  |> filter(fn: (r) => contains(value: r.node, set: ${node:json}))\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"node\"])",
+          "datasource": {
+            "type": "influxdb",
+            "uid": "influxdb-mint"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "min": 0,
+          "displayName": "${__field.labels.node}",
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "fillOpacity": 12,
+            "showPoints": "never",
+            "spanNulls": true,
+            "gradientMode": "opacity"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 15,
+      "type": "timeseries",
+      "title": "Total B/s: sekarang vs ${shift} lalu",
+      "description": "Bandingkan trafik total sekarang dengan kondisi sebelumnya (ubah pembanding lewat variabel 'Bandingkan dengan' di atas). Garis putus = masa lalu.",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "influxdb-mint"
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 12,
+        "y": 32
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "query": "import \"experimental\"\n\nnow = from(bucket: \"traffic\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"traffic_metrics\" and r._field == \"bps_15s\")\n  |> filter(fn: (r) => contains(value: r.node, set: ${node:json}))\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> group(columns: [\"_time\"])\n  |> sum()\n  |> group()\n  |> set(key: \"node\", value: \"Sekarang\")\n\npast = from(bucket: \"traffic\")\n  |> range(start: experimental.subDuration(d: ${shift}, from: v.timeRangeStart), stop: experimental.subDuration(d: ${shift}, from: v.timeRangeStop))\n  |> filter(fn: (r) => r._measurement == \"traffic_metrics\" and r._field == \"bps_15s\")\n  |> filter(fn: (r) => contains(value: r.node, set: ${node:json}))\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> group(columns: [\"_time\"])\n  |> sum()\n  |> group()\n  |> timeShift(duration: ${shift})\n  |> set(key: \"node\", value: \"${shift} lalu\")\n\nunion(tables: [now, past])\n  |> keep(columns: [\"_time\", \"_value\", \"node\"])",
+          "datasource": {
+            "type": "influxdb",
+            "uid": "influxdb-mint"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "Bps",
+          "min": 0,
+          "displayName": "${__field.labels.node}",
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "fillOpacity": 12,
+            "showPoints": "never",
+            "spanNulls": true,
+            "gradientMode": "opacity"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": ".*lalu"
+            },
+            "properties": [
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dash",
+                  "dash": [
+                    8,
+                    8
+                  ]
+                }
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "gray"
+                }
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 0
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 16,
+      "type": "row",
+      "title": "4 · Tiap node vs threshold-nya (garis putus merah = batas ALERT)",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 41
+      },
+      "panels": []
+    },
+    {
+      "id": 17,
+      "type": "timeseries",
+      "title": "PPS — ${node}",
+      "description": "Garis biru = PPS 15 dtk; garis putus merah = threshold PPS node ini.",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "influxdb-mint"
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 6,
+        "x": 0,
+        "y": 42
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "query": "from(bucket: \"traffic\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"traffic_metrics\" and (r._field == \"pps_15s\" or r._field == \"thr_pps\") and r.node == \"${node}\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])",
+          "datasource": {
+            "type": "influxdb",
+            "uid": "influxdb-mint"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "pps",
+          "min": 0,
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "fillOpacity": 12,
+            "showPoints": "never",
+            "spanNulls": true,
+            "gradientMode": "opacity"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "thr_pps"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Threshold"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "red"
+                }
+              },
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dash",
+                  "dash": [
+                    10,
+                    6
+                  ]
+                }
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 0
+              },
+              {
+                "id": "custom.lineInterpolation",
+                "value": "stepAfter"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "pps_15s"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Sekarang"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "blue"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "repeat": "node",
+      "repeatDirection": "h",
+      "maxPerRow": 4
+    },
+    {
+      "id": 18,
+      "type": "timeseries",
+      "title": "B/s — ${node}",
+      "description": "Byte/detik vs threshold.",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "influxdb-mint"
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 6,
+        "x": 0,
+        "y": 49
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "query": "from(bucket: \"traffic\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"traffic_metrics\" and (r._field == \"bps_15s\" or r._field == \"thr_bps\") and r.node == \"${node}\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])",
+          "datasource": {
+            "type": "influxdb",
+            "uid": "influxdb-mint"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "Bps",
+          "min": 0,
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "fillOpacity": 12,
+            "showPoints": "never",
+            "spanNulls": true,
+            "gradientMode": "opacity"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "thr_bps"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Threshold"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "red"
+                }
+              },
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dash",
+                  "dash": [
+                    10,
+                    6
+                  ]
+                }
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 0
+              },
+              {
+                "id": "custom.lineInterpolation",
+                "value": "stepAfter"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "bps_15s"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Sekarang"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "blue"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "repeat": "node",
+      "repeatDirection": "h",
+      "maxPerRow": 4
+    },
+    {
+      "id": 19,
+      "type": "timeseries",
+      "title": "Ukuran paket — ${node}",
+      "description": "B/pesan vs threshold (sinyal S3).",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "influxdb-mint"
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 6,
+        "x": 0,
+        "y": 56
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "query": "from(bucket: \"traffic\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"traffic_metrics\" and (r._field == \"avg_pkt_size_15s\" or r._field == \"thr_avg_pkt_size\") and r.node == \"${node}\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])",
+          "datasource": {
+            "type": "influxdb",
+            "uid": "influxdb-mint"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "min": 0,
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "fillOpacity": 12,
+            "showPoints": "never",
+            "spanNulls": true,
+            "gradientMode": "opacity"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "thr_avg_pkt_size"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Threshold"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "red"
+                }
+              },
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dash",
+                  "dash": [
+                    10,
+                    6
+                  ]
+                }
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 0
+              },
+              {
+                "id": "custom.lineInterpolation",
+                "value": "stepAfter"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "avg_pkt_size_15s"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Sekarang"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "blue"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "repeat": "node",
+      "repeatDirection": "h",
+      "maxPerRow": 4
+    },
+    {
+      "id": 20,
+      "type": "row",
+      "title": "5 · Skenario serangan & event deteksi",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 63
+      },
+      "panels": []
+    },
+    {
+      "id": 21,
+      "type": "state-timeline",
+      "title": "Skenario serangan aktif (menu Serangan)",
+      "description": "Hijau = tenang, merah/oranye = skenario S1–S4 sedang berjalan. Cocokkan dengan lonjakan di grafik atas.",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "influxdb-mint"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 24,
+        "x": 0,
+        "y": 64
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "query": "from(bucket: \"traffic\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"attack\" and r._field == \"active\")\n  |> keep(columns: [\"_time\", \"scenario\"])\n  |> map(fn: (r) => ({_time: r._time, _value: r.scenario}))",
+          "datasource": {
+            "type": "influxdb",
+            "uid": "influxdb-mint"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "fillOpacity": 75,
+            "lineWidth": 0
+          },
+          "color": {
+            "mode": "fixed"
+          },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "none": {
+                  "text": "tenang",
+                  "color": "green",
+                  "index": 0
+                },
+                "S1": {
+                  "text": "S1 flooding",
+                  "color": "red",
+                  "index": 1
+                },
+                "S2": {
+                  "text": "S2 burst",
+                  "color": "orange",
+                  "index": 2
+                },
+                "S3": {
+                  "text": "S3 payload besar",
+                  "color": "purple",
+                  "index": 3
+                },
+                "S4": {
+                  "text": "S4 multi-node",
+                  "color": "dark-red",
+                  "index": 4
+                }
+              }
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "options": {
+        "showValue": "auto",
+        "mergeValues": true,
+        "alignValue": "left",
+        "legend": {
+          "showLegend": false
+        }
+      }
+    },
+    {
+      "id": 22,
+      "type": "table",
+      "title": "Riwayat event ALERT",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "influxdb-mint"
+      },
+      "description": "Event ALERT dari mesin deteksi (median+3×1,4826×MAD, konfirmasi 2-of-3). Terbaru di atas.",
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 68
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "query": "from(bucket: \"traffic\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"alerts\" and r.kind == \"ALERT\" and contains(value: r._field, set: [\"value\", \"threshold\", \"ratio\"]))\n  |> keep(columns: [\"_time\", \"node\", \"metric\", \"type\", \"_field\", \"_value\"])\n  |> pivot(rowKey: [\"_time\", \"node\", \"metric\", \"type\"], columnKey: [\"_field\"], valueColumn: \"_value\")\n  |> group()\n  |> sort(columns: [\"_time\"], desc: true)",
+          "datasource": {
+            "type": "influxdb",
+            "uid": "influxdb-mint"
+          }
+        }
+      ],
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "renameByName": {
+              "_time": "Waktu",
+              "node": "Node",
+              "metric": "Metrik",
+              "type": "Jenis",
+              "value": "Nilai",
+              "threshold": "Threshold",
+              "ratio": "× threshold"
+            },
+            "indexByName": {
+              "_time": 0,
+              "node": 1,
+              "type": 2,
+              "metric": 3,
+              "value": 4,
+              "threshold": 5,
+              "ratio": 6
+            }
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "× threshold"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "orange",
+                      "value": null
+                    },
+                    {
+                      "color": "red",
+                      "value": 5
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "unit",
+                "value": "x"
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm"
+      }
+    }
+  ]
+}

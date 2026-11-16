@@ -1,0 +1,365 @@
+{% extends "base.html" %}
+{% block title %}Beranda — MINT Dashboard{% endblock %}
+{% block content %}
+
+<div id="banner" class="banner MENUNGGU">
+  <span id="sysmsg">MENUNGGU DATA…</span>
+  <span class="scen" id="scen"></span>
+</div>
+
+<div class="cards">
+  <div class="card"><div class="lbl">Node terhubung</div>
+    <div class="val" id="nonline">–</div>
+    <div class="sub" id="nonlinesub">dari – node terdaftar</div></div>
+  <div class="card"><div class="lbl">Total PPS (publish/detik)</div>
+    <div class="val" id="pps">–</div>
+    <div class="sub" id="ppssub"></div></div>
+  <div class="card"><div class="lbl">Total BPS (byte/detik)</div>
+    <div class="val" id="bps">–</div>
+    <div class="sub" id="bpssub"></div></div>
+  <div class="card"><div class="lbl">Ukuran payload rata-rata</div>
+    <div class="val" id="avgpkt">–</div>
+    <div class="sub" id="avgpktsub">jendela 15 dtk · responsif S3</div></div>
+  <div class="card alert"><div class="lbl">Alert aktif</div>
+    <div class="val" id="nalert">–</div>
+    <div class="sub" id="nalertsub"></div></div>
+</div>
+
+<h2 class="sec">Node
+  <a class="helpchip" href="/nodes">Detail semua node →</a>
+  <a class="helpchip" href="/bantuan#node">Apa artinya?</a>
+</h2>
+<div class="ncards" id="nodes"><div class="empty">memuat…</div></div>
+
+<h2 class="sec">Grafik PPS Live (per node)
+  <a class="helpchip" href="/pps">Grafik detail 1 dtk →</a>
+  <a class="helpchip" href="/bantuan#metrik">Pelajari metrik →</a>
+</h2>
+<div class="panel">
+  <div class="legend" id="legend"><span class="li">menunggu data…</span></div>
+  <canvas id="chart" style="width:100%;height:230px;display:block"></canvas>
+</div>
+
+<div class="grid2">
+  <div>
+    <h2 class="sec">Aktivitas Deteksi
+      <a class="helpchip" href="/anomali">Dataset lengkap →</a>
+    </h2>
+    <div class="panel"><div class="log" id="log"><div class="row"><span class="t">belum ada event</span></div></div></div>
+  </div>
+  <div>
+    <h2 class="sec">Kesehatan Sistem
+      <a class="helpchip" href="/server">Detail server →</a>
+    </h2>
+    <div class="panel" id="health"></div>
+  </div>
+</div>
+
+<style>
+  /* ---- kartu node minimalis ---- */
+  .ncards{display:grid;grid-template-columns:repeat(auto-fill,minmax(255px,1fr));gap:13px}
+  .ncard{background:var(--panel);border:1px solid var(--line);border-radius:12px;
+         padding:14px 16px;transition:background .25s,border-color .25s;position:relative}
+  .ncard.alert{border-color:rgba(239,68,68,.55);box-shadow:0 0 0 1px rgba(239,68,68,.25)}
+  .ncard.off{opacity:.55}
+  .nhead{display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap}
+  .ndot{width:9px;height:9px;border-radius:50%;background:var(--muted);flex:none;
+        box-shadow:0 0 0 3px rgba(124,138,165,.15)}
+  .ncard.on .ndot{background:var(--green);box-shadow:0 0 0 3px rgba(52,211,153,.18);
+                  animation:beat 2s infinite}
+  @keyframes beat{50%{box-shadow:0 0 0 6px rgba(52,211,153,.07)}}
+  .nhead b{font-size:15px}
+  .nval{font-size:30px;font-weight:700;color:var(--cyan-strong);line-height:1.15;
+        display:flex;align-items:baseline;gap:9px;flex-wrap:wrap;min-height:36px}
+  .nval .unit{font-size:13px;color:var(--muted);font-weight:400}
+  .nval.hot{color:var(--red)}
+  .nsub{font-size:13.5px;color:var(--text);opacity:.88;margin:2px 0 0;min-height:19px;
+        display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .nsub .v2{font-weight:600}
+  .nsub .offv{color:var(--muted);font-size:13px}
+  .nfoot{color:var(--muted);font-size:11.5px;margin-top:9px;display:flex;gap:8px;
+         flex-wrap:wrap;border-top:1px solid var(--line);padding-top:8px}
+  .nfoot .src{background:var(--cyan-dim);color:var(--cyan);border-radius:99px;
+              padding:1px 8px;font-size:10.5px}
+  .cam{margin:-4px 0 8px;border-radius:9px;overflow:hidden;position:relative;
+       background:var(--panel2);border:1px solid var(--line);aspect-ratio:4/3}
+  .cam img{width:100%;height:100%;object-fit:cover;display:block}
+  .cam .live{position:absolute;top:8px;left:8px;background:rgba(220,38,38,.92);color:#fff;
+             font-size:10px;font-weight:700;border-radius:99px;padding:2px 9px;
+             letter-spacing:1px}
+  .cam .nocam{position:absolute;inset:0;display:flex;align-items:center;
+              justify-content:center;color:var(--muted);font-size:12px}
+  .grid2{display:grid;grid-template-columns:1.35fr 1fr;gap:0 16px}
+  @media(max-width:920px){.grid2{grid-template-columns:1fr}}
+  .legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin-bottom:8px}
+  .legend .li{display:flex;align-items:center;gap:6px}
+  .legend .sw{width:10px;height:10px;border-radius:3px;display:inline-block}
+  .legend .lv{font-family:Consolas,monospace;color:var(--text);font-weight:600}
+  .legend .lv.hot{color:var(--red)}
+  .monoip{font-family:Consolas,monospace;font-size:11.5px}
+  .hrow{display:flex;justify-content:space-between;align-items:center;gap:10px;
+        padding:9px 2px;border-bottom:1px solid var(--line);font-size:13px}
+  .hrow:last-child{border-bottom:none}
+  .hrow .l{display:flex;align-items:center;gap:9px;color:var(--muted)}
+  .hrow .l svg{width:15px;height:15px}
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script>
+/* ============================ GRAFIK PPS LIVE (HALUS v9) ============================
+   Kurva spline monoton + glow + area gradient + animasi mengalir (Grafana-like):
+   titik baru "tumbuh" mulus, titik ujung berdenyut, garis meluncur terus. */
+const PALETTE = ['#22d3ee','#f97316','#a78bfa','#34d399','#f472b6','#facc15','#60a5fa','#fb7185'];
+const colorOf = {};
+let colorIdx = 0;
+function nodeColor(ip){
+  if(!colorOf[ip]) colorOf[ip] = PALETTE[colorIdx++ % PALETTE.length];
+  return colorOf[ip];
+}
+let hist = [];
+const MAXPTS = 90;
+let THR = 0;   // threshold pps (min antar node) — garis putus merah
+const TICK_MS = 2000;   // interval poll Beranda
+const GROW_MS = 750;    // durasi titik baru "tumbuh"
+let lastTick = 0;       // ditandai tiap data masuk (untuk animasi)
+
+function drawChart(){
+  const c = MINTS.prep($('chart'));
+  if(!c) return;
+  const {ctx, w, h} = c;
+  if(hist.length < 2){
+    ctx.fillStyle = cssVar('--chart-text'); ctx.font = '12px Segoe UI';
+    ctx.fillText('menunggu data metrik… (kirim pesan dari node / jalankan serangan)', 12, 26);
+    return;
+  }
+  const padL=40, padR=16, padT=16, padB=22;
+  /* ---- fase animasi ---- */
+  const nowMs = performance.now();
+  const p    = lastTick ? Math.min((nowMs - lastTick)/TICK_MS, 1) : 1;
+  const grow = lastTick ? MINTS.easeOut(Math.min((nowMs - lastTick)/GROW_MS, 1)) : 1;
+  /* ---- skala ---- */
+  let maxv = 1, peak = 0;
+  hist.forEach(pt => pt.rows.forEach(r => { if(r.pps > maxv) maxv = r.pps; if(r.pps > peak) peak = r.pps; }));
+  if(THR && THR > maxv) maxv = THR;
+  maxv = Math.max(Math.ceil(maxv*1.15), 5);
+  const I = TICK_MS/1000;
+  const t0 = hist[0].t, t1 = hist[hist.length-1].t;
+  const vis1 = t1 + I*p;                      // tepi kanan mengalir terus
+  const span = Math.max(vis1 - t0, 0.001);
+  const X = t => padL + (w-padL-padR) * (t-t0)/span;
+  const Y = v => padT + (h-padT-padB) * (1 - v/maxv);
+  /* ---- grid halus + label sumbu Y ---- */
+  ctx.font = '10px Segoe UI';
+  for(let g=0; g<=4; g++){
+    const v = maxv*g/4, y = Y(v);
+    ctx.strokeStyle = cssVar('--chart-grid');
+    ctx.beginPath(); ctx.moveTo(padL,y); ctx.lineTo(w-padR,y); ctx.stroke();
+    ctx.fillStyle = cssVar('--chart-text');
+    ctx.fillText(String(Math.round(v)), 4, y+3);
+  }
+  const hhmmss = t => new Date(t*1000).toLocaleTimeString('id-ID',{hour12:false});
+  ctx.fillStyle = cssVar('--chart-text');
+  for(let g=0; g<=3; g++){
+    const t = t0 + span*g/3, x = X(t);
+    ctx.fillText(hhmmss(t), Math.min(Math.max(x-24, padL-16), w-padR-48), h-6);
+  }
+  /* ---- garis threshold putus-putus ---- */
+  if(THR && THR > 0 && THR < maxv){
+    const y = Y(THR);
+    ctx.strokeStyle = MINTS.hexA(cssVar('--red'), 0.75); ctx.setLineDash([6,5]); ctx.lineWidth = 1.2;
+    ctx.beginPath(); ctx.moveTo(padL,y); ctx.lineTo(w-padR,y); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = cssVar('--red');
+    ctx.fillText('thr ' + THR, w-padR-38, y-4);
+  }
+  /* ---- kurva per node: EMA + spline + glow + area gradient ---- */
+  const series = {};
+  hist.forEach(pt => pt.rows.forEach(r => { (series[r.ip] = series[r.ip]||[]).push([pt.t, r.pps]); }));
+  Object.entries(series).forEach(([ip, arr]) => {
+    if(arr.length < 2) return;
+    const col = nodeColor(ip);
+    let ys = MINTS.ema(arr.map(pp => Y(pp[1])), 0.55);   // nilai -> piksel (Y afirm)
+    let xs = arr.map(pp => X(pp[0]));
+    if(grow < 1){
+      // titik terakhir tumbuh mulus dari titik sebelumnya
+      const tg = MINTS.lerp(arr[arr.length-2][0], arr[arr.length-1][0], grow);
+      const yg = MINTS.lerp(ys[ys.length-2], ys[ys.length-1], grow);
+      xs[xs.length-1] = X(tg); ys[ys.length-1] = yg;
+    }
+    MINTS.fillUnder(ctx, xs, ys, h-padB, col, 0.16);
+    MINTS.strokeGlow(ctx, xs, ys, col, 2.2);
+    MINTS.dot(ctx, xs[xs.length-1], ys[ys.length-1], col, nowMs/1000, 3);
+  });
+  /* ---- label puncak di pojok kanan atas ---- */
+  if(peak > 0){
+    ctx.fillStyle = cssVar('--chart-text'); ctx.font = '10px Segoe UI';
+    const s = 'puncak ' + (Math.round(peak*10)/10) + ' pps';
+    ctx.fillText(s, w-padR-ctx.measureText(s).width-4, padT+2);
+  }
+}
+
+/* ============================ KARTU NODE (PPS BESAR + IP) ============================ */
+const fmtPps = v => (typeof v === 'number' && !Number.isInteger(v))
+                    ? v.toFixed(1) : String(v || 0);
+function nodeCard(n){
+  const on = n.presence === 'ONLINE';
+  const cls = n.status === 'ALERT' ? 'alert' : (on ? 'on' : 'off');
+  const isCam = n.photo || /kamera|cam/i.test(n.sensor + n.topic);
+  const thr = (n.thresholds||{}).pps || 0;
+  const hot = on && thr && n.pps > thr;
+  // nilai PPS besar (instan, jendela 1 dtk) — merah saat lewat threshold
+  let val;
+  if(!on){
+    val = `<span class="offv">OFFLINE${n.last_msg_age!=null?' · terakhir '+ago(n.last_msg_age):''}</span>`;
+  } else {
+    val = `${fmtPps(n.pps)} <span class="unit">PPS</span>` +
+          (n.status === 'ALERT' ? '<span class="unit" style="color:var(--red);font-weight:700">ALERT</span>' : '');
+  }
+  // baris sekunder: nilai sensor live / info foto
+  let sub = '';
+  if(on){
+    if(n.readings && n.readings.items){
+      const it = n.readings.items;
+      sub = it.map((r,i) => `<span class="${i?'':'v2'}">${esc(String(r.value))} ${esc(r.unit)}</span>`).join('<span style="opacity:.4">·</span>');
+    } else if(n.photo){
+      sub = `<span class="v2">${fmt(n.photo.size)}</span><span>foto terakhir</span>` +
+            (n.photo.age!=null ? `<span>${ago(n.photo.age)}</span>` : '');
+    } else if(n.readings && n.readings.text){
+      sub = `<span>${esc(n.readings.text)}</span>`;
+    }
+  }
+  const cam = (isCam && on) ? `
+    <div class="cam">
+      <img id="cam-${esc(n.ip)}" alt="foto terakhir" src="/api/photo?topic=${encodeURIComponent(n.topic)}">
+      <span class="live">LIVE</span>
+    </div>` : (isCam ? `
+    <div class="cam"><span class="nocam">kamera offline</span></div>` : '');
+  return `
+  <div class="ncard ${cls} ${on?'on':''}">
+    <div class="nhead">
+      <span class="ndot"></span><b>${esc(n.name)}</b>
+      <span class="badge">${esc(n.sensor)}</span>
+      ${n.registered ? '' : '<span class="badge warn">TAK TERDAFTAR</span>'}
+      ${n.status === 'ALERT' ? '<span class="pill alert">ALERT</span>' : ''}
+    </div>
+    ${cam}
+    <div class="nval ${hot?'hot':''}">${val}</div>
+    ${sub ? `<div class="nsub">${sub}</div>` : ''}
+    <div class="nfoot">
+      <span class="monoip">${esc(n.ip)}</span>
+      <span>${esc(n.topic)}</span>
+      <span>${n.last_msg_age != null ? 'pesan '+ago(n.last_msg_age)+' · ' : ''}${fmtRate(n.bps)}</span>
+      ${n.presence_src ? `<span class="src">via ${esc(n.presence_src)}</span>` : ''}
+    </div>
+  </div>`;
+}
+
+/* ============================ KESEHATAN SISTEM ============================ */
+function renderHealth(s){
+  const rows = [];
+  const ok = (name, good, note) => `
+    <div class="hrow">
+      <span class="l">${name}</span>
+      <span class="pill ${good?'ok':'off'}">${good?'AKTIF':'MATI'}</span>
+    </div>
+    ${note ? `<div class="hrow" style="border-bottom:none;padding-top:0">
+        <span class="l" style="font-size:11.5px">${note}</span><span></span></div>` : ''}`;
+  const src = s.metric_source || {};
+  rows.push(ok('Sumber metrik (PPS/BPS)',
+    !!src.source, src.label || 'menunggu data pertama…'));
+  rows.push(ok('MQTT cache (sensor live)',
+    s.mqtt_cache.connected, s.mqtt_cache.connected
+      ? `${s.mqtt_cache.rx_count} pesan diterima` : 'broker tidak terjangkau'));
+  rows.push(ok('Ping kehadiran node', s.ping.enabled,
+    s.ping.enabled ? 'cek ICMP tiap 5 detik' : 'dimatikan (MINT_PING=0)'));
+  rows.push(ok('Notifikasi Telegram', s.telegram_enabled,
+    s.telegram_enabled ? 'alert PPS+BPS digabung 1 pesan'
+                       : 'isi token di .env untuk mengaktifkan'));
+  $('health').innerHTML = rows.join('');
+}
+
+/* ============================ POLL UTAMA ============================ */
+async function tick(){
+  try{
+    const r = await jfetch('/api/state');
+    const s = await r.json();
+    const b = $('banner');
+    const atk = s.attack || {};
+    if(atk.running){
+      b.className = 'banner SERANGAN';
+      $('sysmsg').textContent = `UJI SERANGAN ${atk.kode} BERJALAN (${atk.elapsed||0} dtk)`;
+      $('scen').textContent = 'dari menu Serangan — pantau grafik di bawah';
+    } else {
+      b.className = 'banner ' + (s.system==='SERANGAN TERDETEKSI'?'SERANGAN':
+                                 s.system==='NORMAL'?'NORMAL':'MENUNGGU');
+      $('sysmsg').textContent = s.system;
+      $('scen').textContent = s.scenario ? '→ '+s.scenario :
+        (s.system==='MENUNGGU DATA' ? 'menunggu pesan pertama dari node / analyzer' : '');
+    }
+    $('nonline').textContent = s.global.online;
+    $('nonlinesub').textContent = `dari ${s.global.devices} node terpantau`;
+    $('pps').textContent = s.global.pps_15s != null ? s.global.pps_15s : s.global.pps;
+    $('ppssub').textContent = 'rata-rata 15 dtk — ' + ((s.metric_source||{}).label || '');
+    $('bps').textContent = fmtRate(s.global.bps_15s != null ? s.global.bps_15s : s.global.bps);
+    $('bpssub').textContent = 'rata-rata 15 dtk — ' + ((s.metric_source||{}).label || '');
+    const avgNodes = Object.values(s.nodes).filter(n => n.registered && n.presence === 'ONLINE');
+    const avgPkt = avgNodes.length
+      ? Math.round(avgNodes.reduce((a, n) => a + (n.avg_pkt_size_15s || 0), 0) / avgNodes.length)
+      : 0;
+    $('avgpkt').textContent = fmt(avgPkt);
+    const avgThr = avgNodes.map(n => (n.thresholds||{}).avg_pkt_size || 0).filter(v => v > 0);
+    $('avgpktsub').textContent = avgThr.length
+      ? `jendela 15 dtk · thr maks ${fmt(Math.max(...avgThr))}`
+      : 'jendela 15 dtk · responsif S3';
+    const nAl = Object.values(s.nodes).filter(n=>n.status==='ALERT').length;
+    $('nalert').textContent = nAl;
+    $('nalertsub').textContent = nAl ? 'lihat Anomali & Dataset' : 'tidak ada serangan';
+
+    // histori grafik + legenda bernilai live — v9.2.5: jendela 15 dtk agar
+    // lonjakan S1/S3/S4 terlihat dalam 1-2 detik (dulu rata-rata 2 mnt)
+    const rows = Object.values(s.nodes).map(n => ({ip:n.ip, name:n.name, pps:n.pps_15s||0, hot:n.status==='ALERT'}))
+                                     .sort((a,c) => a.name.localeCompare(c.name));
+    hist.push({t: Date.now()/1000, rows});
+    if(hist.length > MAXPTS) hist.shift();
+    lastTick = performance.now();          // mulai animasi titik baru
+    const thrs = Object.values(s.nodes).map(n => ((n.thresholds||{}).pps)||0).filter(v => v > 0);
+    THR = thrs.length ? Math.min(...thrs) : 0;
+    $('legend').innerHTML = rows.map(r =>
+      `<span class="li"><span class="sw" style="background:${nodeColor(r.ip)}"></span>${esc(r.name)} ` +
+      `<span class="lv ${r.hot?'hot':''}">${Math.round(r.pps*10)/10}</span></span>`
+    ).join('') || '<span class="li">menunggu data…</span>';
+    drawChart();
+
+    // kartu node minimalis
+    $('nodes').innerHTML = Object.values(s.nodes).map(nodeCard).join('')
+                         || '<div class="empty">belum ada node — cek devices.json</div>';
+
+    // log deteksi
+    $('log').innerHTML = s.alerts.slice().reverse().map(a => `
+      <div class="row ${a.kind}">
+        <div class="t">${esc(a.time)} · ${esc(a.device)} (${esc(a.mac)})</div>
+        <b>${esc(a.type)}</b> ${esc(a.metric)} = ${fmt(a.value)}
+        &gt; thr ${fmt(a.threshold)} <span class="tag">(${a.ratio}x)</span>
+        ${a.hint?'<div class="tag">'+esc(a.hint)+'</div>':''}
+      </div>`).join('') || '<div class="row"><span class="t">belum ada event</span></div>';
+
+    renderHealth(s);
+    window._setFooter(s);
+  }catch(e){ /* biarkan isi terakhir */ }
+}
+
+/* ============================ THUMBNAIL KAMERA ============================ */
+setInterval(() => {
+  if(document.visibilityState !== 'visible') return;
+  document.querySelectorAll('.cam img').forEach(img => {
+    const base = img.src.split('&t=')[0];
+    img.src = base + '&t=' + Date.now();
+  });
+}, 10000);
+
+tick();
+setInterval(tick, 2000);
+MINTS.rafLoop(drawChart);   // render 60fps: aliran + denyut + kurva halus
+</script>
+{% endblock %}

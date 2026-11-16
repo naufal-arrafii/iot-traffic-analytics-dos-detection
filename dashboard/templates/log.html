@@ -1,0 +1,140 @@
+{% extends "base.html" %}
+{% block title %}Log Sistem — MINT Dashboard{% endblock %}
+{% block content %}
+
+<div class="banner MENUNGGU" id="logbanner">
+  <span id="logmsg">Log Sistem — gabungan log internal, event deteksi, dan riwayat pengujian</span>
+  <span class="scen" id="logsub">auto-refresh 3 detik</span>
+</div>
+
+<div class="logbar">
+  <input id="cari" placeholder="Saring log… (mis. ALERT, sesi, threshold, IP node)" spellcheck="false">
+  <div class="tabs">
+    <button class="tab on" data-tab="internal" onclick="pilihTab('internal')">Log Internal</button>
+    <button class="tab" data-tab="alerts" onclick="pilihTab('alerts')">Event Deteksi</button>
+    <button class="tab" data-tab="attack" onclick="pilihTab('attack')">Riwayat Serangan</button>
+    <button class="tab" data-tab="sessions" onclick="pilihTab('sessions')">Riwayat Sesi</button>
+  </div>
+  <label class="auto"><input type="checkbox" id="autoscroll" checked> auto-scroll</label>
+  <a class="btn small" href="/api/logs/export">Unduh .txt</a>
+</div>
+
+<div class="panel tscroll" id="logpanel" style="padding:0">
+  <div class="log biglog" id="loglist"><div class="row"><span class="t">memuat…</span></div></div>
+</div>
+
+<div class="cards" style="margin-top:16px">
+  <div class="card"><div class="lbl">Baris log internal</div>
+    <div class="val" id="clog">–</div>
+    <div class="sub">maks 300 baris disimpan di memori</div></div>
+  <div class="card"><div class="lbl">Event deteksi (total)</div>
+    <div class="val" id="calert">–</div>
+    <div class="sub">dari alerts.jsonl</div></div>
+  <div class="card"><div class="lbl">Waktu server</div>
+    <div class="val" id="ctime" style="font-size:19px">–</div>
+    <div class="sub" id="ctimesub"></div></div>
+</div>
+
+<style>
+  .logbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
+  .logbar input#cari{flex:1;min-width:220px;padding:9px 13px;background:var(--panel);
+      border:1px solid var(--line);border-radius:9px;color:var(--text);font-size:13px;outline:none}
+  .logbar input#cari:focus{border-color:var(--cyan)}
+  .tabs{display:flex;gap:4px;flex-wrap:wrap}
+  .tab{padding:8px 13px;border-radius:9px;border:1px solid var(--line);background:var(--panel);
+       color:var(--muted);font-size:12.5px;font-weight:600;cursor:pointer;transition:.15s}
+  .tab:hover{color:var(--text)}
+  .tab.on{color:var(--cyan);background:var(--cyan-dim);border-color:transparent}
+  .logbar .auto{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);
+                cursor:pointer;user-select:none}
+  .biglog{max-height:520px}
+  .biglog .row{padding:9px 14px}
+  .mono{font-family:Consolas,monospace;font-size:12px}
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script>
+/* ============================ LOG SISTEM (v9.2.5) ============================ */
+let TAB = 'internal';
+let DATA = null;
+
+function pilihTab(t){
+  TAB = t;
+  document.querySelectorAll('.tab').forEach(b =>
+    b.classList.toggle('on', b.dataset.tab === t));
+  render();
+}
+
+function barisLog(l){
+  return `<div class="row"><span class="t mono">${esc(l)}</span></div>`;
+}
+function barisAlert(a){
+  return `<div class="row ${a.kind}">
+    <div class="t">${esc(a.time)} · ${esc(a.device)} (${esc(a.mac)})</div>
+    <b>${esc(a.type)}</b> ${esc(a.metric)} = ${fmt(a.value)} &gt; thr ${fmt(a.threshold)}
+    <span class="tag">(${a.ratio}x)</span>
+    ${a.hint ? '<div class="tag">'+esc(a.hint)+'</div>' : ''}
+  </div>`;
+}
+function barisAttack(h){
+  return `<div class="row">
+    <div class="t">${esc(h.start_str||'')} · ${h.elapsed ?? 0} dtk</div>
+    <b>${esc(h.kode)}</b> ${esc(h.nama||'')} — target ${esc(h.target||'-')}
+    @ ${h.rate}/s ${h.size ? '· '+h.size+' KB/pesan' : ''}
+    <span class="pill ${h.status==='selesai'?'ok':h.status==='berjalan'?'alert':'off'}">${esc(h.status)}</span>
+  </div>`;
+}
+function barisSesi(h){
+  return `<div class="row">
+    <div class="t">${esc(h.start_str||'')}</div>
+    <b>${esc(h.label)}</b> — ${h.n_msg.toLocaleString('id-ID')} pesan ·
+    PCAP ${fmt(h.pcap_size)} · ${h.csv_rows != null ? h.csv_rows+' baris CSV' : ''}
+    <span class="pill ok">${esc(h.status||'selesai')}</span>
+  </div>`;
+}
+
+function render(){
+  if(!DATA) return;
+  const q = ($('cari').value || '').toLowerCase();
+  const el = $('loglist');
+  let rows = [];
+  if(TAB === 'internal'){
+    rows = (DATA.logs || []).filter(l => !q || l.toLowerCase().includes(q)).map(barisLog);
+  } else if(TAB === 'alerts'){
+    rows = (DATA.alerts || []).filter(a => !q ||
+      (a.device + a.metric + a.type + a.kind + (a.hint||'')).toLowerCase().includes(q))
+      .map(barisAlert);
+  } else if(TAB === 'attack'){
+    rows = (DATA.attack_history || []).filter(h => !q ||
+      (h.kode + (h.nama||'') + (h.target||'')).toLowerCase().includes(q)).map(barisAttack);
+  } else {
+    rows = (DATA.sessions || []).filter(h => !q ||
+      String(h.label).toLowerCase().includes(q)).map(barisSesi);
+  }
+  el.innerHTML = rows.join('')
+    || `<div class="row"><span class="t">tidak ada baris${q ? ' yang cocok dengan saringan' : ''}</span></div>`;
+  if($('autoscroll').checked) el.scrollTop = 0;   // terbaru di atas -> scroll ke atas
+}
+
+let cariTimer = null;
+$('cari').addEventListener('input', () => {
+  clearTimeout(cariTimer);
+  cariTimer = setTimeout(render, 200);
+});
+
+async function tick(){
+  try{
+    const r = await jfetch('/api/logs');      // saringan dilakukan di sisi klien
+    DATA = await r.json();
+    render();
+    $('clog').textContent = DATA.counts ? DATA.counts.logs : '–';
+    $('calert').textContent = DATA.counts ? DATA.counts.alerts : '–';
+    $('ctime').textContent = (DATA.server_time || '–').split(' ')[1] || '–';
+    $('ctimesub').textContent = (DATA.server_time || '–').split(' ')[0] || '';
+  }catch(e){ /* biarkan */ }
+}
+tick();
+setInterval(tick, 3000);
+</script>
+{% endblock %}

@@ -1,0 +1,14 @@
+# Dependensi host MINT (analyzer, perekam, dashboard, notifikasi)
+paho-mqtt>=2.0
+pandas>=2.0
+influxdb-client>=1.40
+requests>=2.31
+matplotlib>=3.8
+flask>=3.0
+werkzeug>=3.0
+psutil>=5.9
+python-dotenv>=1.0
+# v9: feeder_sensor.py (simulasi foto JPEG) memakai Pillow
+pillow>=10.0
+# opsional: broker Python tanpa Docker (jalankan_broker.bat fallback)
+# amqtt>=0.11

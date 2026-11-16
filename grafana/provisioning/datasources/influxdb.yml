@@ -1,0 +1,17 @@
+# Provisioning datasource Grafana untuk MINT (auto-load saat container mulai)
+apiVersion: 1
+
+datasources:
+  - name: InfluxDB-MINT
+    uid: influxdb-mint          # dirujuk panel dashboard mint-traffic.json
+    type: influxdb
+    access: proxy
+    url: http://influxdb:8086
+    isDefault: true
+    jsonData:
+      version: Flux
+      organization: mint
+      defaultBucket: traffic
+      tlsSkipVerify: true
+    secureJsonData:
+      token: mint-super-secret-token-change-me

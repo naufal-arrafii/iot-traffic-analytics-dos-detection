@@ -1,0 +1,210 @@
+{% extends "base.html" %}
+{% block title %}Anomali &amp; Dataset — MINT Dashboard{% endblock %}
+{% block content %}
+
+<h2 class="sec">Anomali &amp; Dataset
+  <a class="helpchip" href="/bantuan#dataset">Panduan dataset →</a>
+</h2>
+<p style="color:var(--muted);font-size:13px;margin:-6px 0 14px">
+  Kumpulan kejadian anomali yang tertangkap melebihi ambang threshold. Data dapat
+  diunduh sebagai CSV/JSON untuk dianalisis lebih lanjut (Bab 6 laporan PBL).
+  Waktu memakai jam server — terisi realtime saat uji serangan berjalan.
+</p>
+
+<div class="banner SERANGAN" id="atknote" style="display:none">
+  <span id="atkmsg">UJI SERANGAN BERJALAN</span>
+  <span class="scen">window yang tercatat sekarang ditandai kode serangan</span>
+</div>
+
+<div class="cards">
+  <div class="card"><div class="lbl">Event deteksi</div>
+    <div class="val" id="stEvents">–</div>
+    <div class="sub">ALERT + pemulihan</div></div>
+  <div class="card alert"><div class="lbl">Alert anomali</div>
+    <div class="val" id="stAlerts">–</div>
+    <div class="sub">episode melebihi threshold</div></div>
+  <div class="card"><div class="lbl">Window &gt; threshold</div>
+    <div class="val" id="stWindows">–</div>
+    <div class="sub">baris dataset anomali</div></div>
+  <div class="card"><div class="lbl">Berkas dataset</div>
+    <div class="val" id="stFiles">–</div>
+    <div class="sub">folder data/*.csv</div></div>
+</div>
+
+<div class="panel" style="margin-bottom:16px">
+  <h3>Unduh dataset anomali</h3>
+  <div style="display:flex;gap:10px;flex-wrap:wrap">
+    <button class="btn primary" onclick="unduh('/api/anomalies/export?type=windows&format=csv')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      Window &gt; threshold (CSV)</button>
+    <button class="btn" onclick="unduh('/api/anomalies/export?type=windows&format=json')">Window (JSON)</button>
+    <button class="btn" onclick="unduh('/api/anomalies/export?type=events&format=csv')">Event deteksi (CSV)</button>
+    <button class="btn" onclick="unduh('/api/anomalies/export?type=events&format=json')">Event (JSON)</button>
+  </div>
+  <p style="color:var(--muted);font-size:11.5px;margin-top:9px">
+    “Window” = seluruh detik yang melampaui threshold (dataset mentah);
+    “Event” = ringkasan episode ALERT/RECOVERY dari mesin deteksi (2-of-3, override).
+  </p>
+</div>
+
+<h2 class="sec">Window yang Melebihi Threshold</h2>
+<div class="panel" style="margin-bottom:16px">
+  <div class="tscroll" style="max-height:420px;overflow-y:auto">
+    <table>
+      <thead><tr><th>Waktu</th><th>Perangkat</th><th>PPS</th><th>BPS</th>
+        <th>Avg pkt</th><th>Topik</th><th>Metrik yang terlampaui</th><th>Serangan</th></tr></thead>
+      <tbody id="winrows"><tr><td colspan="8" class="empty">belum ada data —
+        jalankan analyzer; window di atas threshold otomatis tercatat di sini</td></tr></tbody>
+    </table>
+  </div>
+</div>
+
+<h2 class="sec">Event Deteksi</h2>
+<div class="panel" style="margin-bottom:16px">
+  <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px">
+    <select id="fKind" class="sel">
+      <option value="">Semua jenis</option>
+      <option value="ALERT">Hanya ALERT</option>
+      <option value="RECOVERY">Hanya RECOVERY</option>
+    </select>
+    <select id="fDev" class="sel"><option value="">Semua perangkat</option></select>
+  </div>
+  <div class="tscroll" style="max-height:420px;overflow-y:auto">
+    <table>
+      <thead><tr><th>Waktu</th><th>Perangkat</th><th>Kejadian</th><th>Metrik</th>
+        <th>Nilai</th><th>Threshold</th><th>Rasio</th><th>Indikasi</th></tr></thead>
+      <tbody id="evrows"><tr><td colspan="8" class="empty">belum ada event</td></tr></tbody>
+    </table>
+  </div>
+</div>
+
+<h2 class="sec">Berkas Dataset (folder data/)</h2>
+<div class="panel">
+  <div class="tscroll">
+    <table>
+      <thead><tr><th>Nama berkas</th><th>Baris</th><th>Ukuran</th><th>Terakhir diubah</th><th></th></tr></thead>
+      <tbody id="filerows"><tr><td colspan="5" class="empty">folder data/ kosong</td></tr></tbody>
+    </table>
+  </div>
+</div>
+
+<style>
+  .sel{padding:8px 12px;border-radius:8px;border:1px solid var(--input-line);
+       background:var(--input-bg);color:var(--text);font-size:12.5px;outline:none}
+  td code{background:var(--cyan-dim);color:var(--cyan);border-radius:6px;
+          padding:2px 8px;font-size:11.5px;display:inline-block;margin:1px 2px 1px 0;
+          font-family:Consolas,monospace}
+  .mono{font-family:Consolas,monospace;font-size:12px}
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let DATA = null;
+
+async function unduh(url){
+  try{
+    const r = await jfetch(url);
+    if(!r.ok){ alert('Gagal mengunduh: ' + url); return; }
+    const blob = await r.blob();
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    const cd = r.headers.get('Content-Disposition') || '';
+    const m = cd.match(/filename="([^"]+)"/);
+    a.download = m ? m[1] : 'mint_dataset.csv';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+  }catch(e){ alert('Tidak dapat menghubungi server.'); }
+}
+
+function renderStats(){
+  const st = DATA.stats;
+  $('stEvents').textContent = st.events;
+  $('stAlerts').textContent = st.alerts;
+  $('stWindows').textContent = st.windows;
+  $('stFiles').textContent = st.files;
+}
+
+function renderWindows(){
+  const rows = (DATA.windows || []).slice(0, 200);
+  $('winrows').innerHTML = rows.map(w => `
+    <tr class="alert-row">
+      <td class="mono">${esc(w.waktu || w.ts)}</td>
+      <td>${esc(w.device)}</td>
+      <td>${esc(w.n_publish)}</td>
+      <td>${fmt(w.bytes)}</td>
+      <td>${fmt(w.avg_pkt_size)}</td>
+      <td>${esc(w.topic_last)}</td>
+      <td>${(w.metrik_lebihi||'').split('; ').filter(Boolean).map(x =>
+          `<code>${esc(x)}</code>`).join(' ')}</td>
+      <td>${w.serangan ? `<span class="pill alert">${esc(w.serangan)}</span>`
+                      : '<span style="color:var(--muted)">–</span>'}</td>
+    </tr>`).join('') ||
+    '<tr><td colspan="8" class="empty">belum ada data — jalankan analyzer; window di atas threshold otomatis tercatat di sini</td></tr>';
+}
+
+function renderEvents(){
+  const kind = $('fKind').value, dev = $('fDev').value;
+  const rows = (DATA.events || []).filter(e =>
+    (!kind || e.kind === kind) && (!dev || e.device === dev)).slice(0, 200);
+  $('evrows').innerHTML = rows.map(e => `
+    <tr class="${e.kind==='ALERT'?'alert-row':''}">
+      <td class="mono">${esc(e.time)}</td>
+      <td>${esc(e.device)}<br><span style="color:var(--muted);font-size:10.5px">${esc(e.mac)}</span></td>
+      <td><span class="pill ${e.kind==='ALERT'?'alert':'ok'}">${esc(e.kind)}</span><br>
+          <span style="font-size:11px">${esc(e.type)}</span></td>
+      <td>${esc(e.metric)}</td>
+      <td><b>${fmt(e.value)}</b></td>
+      <td>${fmt(e.threshold)}</td>
+      <td><span class="tag">${e.ratio}x</span></td>
+      <td style="font-size:11.5px;color:var(--muted)">${esc(e.hint || '')}</td>
+    </tr>`).join('') ||
+    '<tr><td colspan="8" class="empty">tidak ada event yang cocok dengan filter</td></tr>';
+}
+
+function renderFiles(){
+  $('filerows').innerHTML = (DATA.files || []).map(f => `
+    <tr>
+      <td class="mono">${esc(f.name)}</td>
+      <td>${f.rows}</td>
+      <td>${fmt(f.size)}</td>
+      <td>${new Date(f.mtime*1000).toLocaleString('id-ID')}</td>
+      <td><button class="btn small" onclick="unduh('/api/dataset/download?name=${encodeURIComponent(f.name)}')">Unduh</button></td>
+    </tr>`).join('') ||
+    '<tr><td colspan="5" class="empty">folder data/ kosong — hasil pcap_analyzer/run_session tersimpan di sini</td></tr>';
+}
+
+function renderDevFilter(){
+  const devs = [...new Set((DATA.events||[]).map(e => e.device))];
+  const cur = $('fDev').value;
+  $('fDev').innerHTML = '<option value="">Semua perangkat</option>' +
+    devs.map(d => `<option value="${esc(d)}">${esc(d)}</option>`).join('');
+  if(devs.includes(cur)) $('fDev').value = cur;
+}
+
+async function tick(){
+  try{
+    const r = await jfetch('/api/anomalies');
+    DATA = await r.json();
+    renderStats(); renderWindows(); renderDevFilter(); renderEvents(); renderFiles();
+    // integrasi menu Serangan <-> Anomali: tanda uji sedang berjalan
+    const atk = DATA.attack || {};
+    const note = $('atknote');
+    if(atk.running){
+      note.style.display = '';
+      $('atkmsg').textContent =
+        `UJI SERANGAN ${atk.kode || ''} BERJALAN (${atk.elapsed || 0} dtk)` +
+        (atk.target ? ` — target ${atk.target}` : '');
+    } else note.style.display = 'none';
+    // footer: pakai waktu SERVER (disamakan dengan kolom Waktu di atas)
+    $('updated').textContent = 'Jam server: ' + (DATA.server_time ||
+      new Date().toLocaleTimeString('id-ID', {hour12:false}));
+  }catch(e){ /* biarkan isi terakhir */ }
+}
+
+$('fKind').addEventListener('change', renderEvents);
+$('fDev').addEventListener('change', renderEvents);
+tick();
+setInterval(tick, 2000);
+</script>
+{% endblock %}

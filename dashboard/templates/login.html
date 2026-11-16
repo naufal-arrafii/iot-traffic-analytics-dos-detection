@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="id" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="color-scheme" content="dark light">
+<title>Masuk — MINT Dashboard</title>
+<link rel="icon" type="image/png" href="{{ url_for('static', filename='favicon.png') }}">
+<style>
+  :root{
+    --page-bg:#0b1220; --shell:#0e1626; --line:#1e2b3f; --brandline:#1c2940;
+    --text:#e5edf7; --muted:#8fa3bd; --muted2:#5d7290; --label:#a9bad0;
+    --cyan:#22d3ee; --input-bg:#0b1424; --input-line:#24344d;
+    --btn-text:#04222b; --note-line:#1c2940; --note-b:#9fb3ca;
+  }
+  :root[data-theme="light"]{
+    --page-bg:#eef3f9; --shell:#ffffff; --line:#dbe4ef; --brandline:#e3eaf3;
+    --text:#17253c; --muted:#5c6c85; --muted2:#7a8aa2; --label:#41546f;
+    --cyan:#0891b2; --input-bg:#f6f9fc; --input-line:#c9d6e6;
+    --btn-text:#ffffff; --note-line:#e3eaf3; --note-b:#41546f;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: "Segoe UI", system-ui, -apple-system, Roboto, Arial, sans-serif;
+    background: var(--page-bg);
+    background-image: radial-gradient(1100px 500px at 15% -10%, rgba(34,211,238,.14), transparent 60%),
+                      radial-gradient(900px 500px at 110% 110%, rgba(249,115,22,.10), transparent 55%);
+    color: var(--text);
+    min-height: 100vh;
+    display: flex; align-items: center; justify-content: center;
+    padding: 24px;
+    transition: background .25s, color .25s;
+  }
+  .shell {
+    width: 100%; max-width: 900px;
+    display: flex;
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 0 24px 70px rgba(0,0,0,.35);
+    background: var(--shell);
+    position: relative;
+  }
+  .themebtn{position:absolute;top:14px;right:14px;z-index:5;width:36px;height:36px;
+            border-radius:10px;border:1px solid var(--line);background:var(--shell);
+            color:var(--muted);cursor:pointer;display:flex;align-items:center;
+            justify-content:center}
+  .themebtn:hover{color:var(--cyan);border-color:var(--cyan)}
+  .themebtn svg{width:16px;height:16px}
+  /* ---- panel kiri: identitas MINT ---- */
+  .brand {
+    flex: 1 1 46%;
+    background: linear-gradient(160deg, rgba(14,34,51,.9) 0%, rgba(11,18,32,.92) 70%);
+    border-right: 1px solid var(--line);
+    padding: 44px 38px;
+    display: flex; flex-direction: column;
+  }
+  :root[data-theme="light"] .brand{
+    background: linear-gradient(160deg, #eaf4f8 0%, #f6fafd 70%);
+  }
+  .logo-chip {
+    width: 84px; height: 84px;
+    background: #fff;
+    border-radius: 20px;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 8px 28px rgba(34,211,238,.28);
+    margin-bottom: 26px;
+  }
+  .logo-chip img { width: 68px; height: 68px; border-radius: 14px; }
+  .brand h1 { font-size: 26px; font-weight: 700; letter-spacing: 1px; color: #fff; }
+  :root[data-theme="light"] .brand h1 { color: #17253c; }
+  .brand h1 span { color: var(--cyan); }
+  .brand .tagline {
+    font-size: 12.5px; color: var(--muted); letter-spacing: .6px;
+    margin-top: 6px; margin-bottom: 22px; line-height: 1.6;
+  }
+  .brand ul { list-style: none; }
+  .brand li {
+    font-size: 13px; color: var(--text); line-height: 1.5;
+    padding: 10px 0; border-top: 1px solid var(--brandline);
+    display: flex; gap: 10px; align-items: flex-start;
+  }
+  .brand li::before {
+    content: ""; width: 7px; height: 7px; border-radius: 2px;
+    background: #f97316; flex: 0 0 auto; margin-top: 6px;
+  }
+  .brand .foot {
+    margin-top: auto; padding-top: 22px;
+    font-size: 11.5px; color: var(--muted2); letter-spacing: .4px; line-height: 1.7;
+  }
+  /* ---- panel kanan: form ---- */
+  .formside {
+    flex: 1 1 54%;
+    padding: 48px 42px;
+    display: flex; flex-direction: column; justify-content: center;
+  }
+  .formside h2 { font-size: 20px; font-weight: 600; }
+  .formside .sub { font-size: 13px; color: var(--muted); margin: 6px 0 26px; }
+  label {
+    display: block; font-size: 12.5px; font-weight: 600;
+    color: var(--label); margin: 14px 0 6px; letter-spacing: .3px;
+  }
+  input[type=text], input[type=password] {
+    width: 100%; padding: 11px 13px;
+    background: var(--input-bg); color: var(--text);
+    border: 1px solid var(--input-line); border-radius: 9px;
+    font-size: 14px; font-family: inherit; outline: none;
+    transition: border-color .15s, box-shadow .15s;
+  }
+  input:focus {
+    border-color: var(--cyan);
+    box-shadow: 0 0 0 3px rgba(34,211,238,.15);
+  }
+  button[type=submit] {
+    width: 100%; margin-top: 24px; padding: 12px 14px;
+    background: linear-gradient(135deg, #22d3ee, #0891b2);
+    color: var(--btn-text); border: none; border-radius: 9px;
+    font-size: 14.5px; font-weight: 700; font-family: inherit; cursor: pointer;
+    letter-spacing: .3px;
+    transition: filter .15s, transform .05s;
+  }
+  button[type=submit]:hover { filter: brightness(1.1); }
+  button[type=submit]:active { transform: translateY(1px); }
+  .alert {
+    border: 1px solid #7f1d1d; background: rgba(127,29,29,.16); color: #fca5a5;
+    font-size: 13px; padding: 10px 12px; border-radius: 8px;
+    margin-top: 18px; line-height: 1.5;
+  }
+  .alert.warn { border-color: #92400e; background: rgba(146,64,14,.14); color: #fcd34d; }
+  .note {
+    font-size: 12px; color: var(--muted2); margin-top: 22px; line-height: 1.7;
+    border-top: 1px solid var(--note-line); padding-top: 16px;
+  }
+  .note b { color: var(--note-b); }
+  @media (max-width: 760px) {
+    .shell { flex-direction: column; }
+    .brand { border-right: none; border-bottom: 1px solid var(--line); }
+    .brand .foot { display: none; }
+  }
+</style>
+</head>
+<body>
+  <div class="shell">
+    <button class="themebtn" onclick="toggleTheme()" title="Ganti tema gelap/terang">
+      <svg id="ico-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+      <svg id="ico-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+    </button>
+    <div class="brand">
+      <div class="logo-chip"><img src="{{ url_for('static', filename='logo.jpg') }}" alt="Logo MINT"></div>
+      <h1>MINT<span>.</span></h1>
+      <div class="tagline">MQTT Injection &amp; Network Traffic-analyzer<br>Network-based IDS untuk jaringan IoT</div>
+      <ul>
+        <li>Deteksi anomali trafik MQTT real-time (PPS, BPS, ukuran payload)</li>
+        <li>Ambang adaptif per perangkat: median + k&middot;MAD, aturan 2-of-3</li>
+        <li>Data node realtime: suhu, jarak, cahaya, foto live kamera</li>
+        <li>Menu penarikan dataset anomali (CSV/JSON) + tema gelap/terang</li>
+        <li>Notifikasi otomatis Telegram saat serangan terdeteksi</li>
+      </ul>
+      <div class="foot">
+        PBL &middot; Teknik Multimedia dan Jaringan &middot; Politeknik Negeri Jakarta<br>
+        Tim MINT 2026 &mdash; dashboard diakses dari jaringan lokal
+      </div>
+    </div>
+    <div class="formside">
+      <h2>Masuk Dashboard</h2>
+      <div class="sub">Gunakan akun tim MINT untuk melanjutkan.</div>
+      {% if error %}
+        <div class="alert{{ ' warn' if sisa else '' }}">{{ error }}</div>
+      {% endif %}
+      <form method="post" autocomplete="off">
+        <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+        <label for="username">Nama pengguna</label>
+        <input type="text" id="username" name="username" autofocus required>
+        <label for="password">Kata sandi</label>
+        <input type="password" id="password" name="password" required>
+        <button type="submit">Masuk</button>
+      </form>
+      <div class="note">
+        Akun bawaan: <b>admin / mintadmin</b> &mdash; segera ganti lewat menu
+        <b>Pengaturan</b> setelah masuk. Lupa kata sandi? Hubungi admin
+        (atur ulang lewat <b>dashboard/add_user.py</b>).
+      </div>
+    </div>
+  </div>
+<script>
+function applyTheme(t){
+  document.documentElement.setAttribute('data-theme', t);
+  try{ localStorage.setItem('mint-theme', t); }catch(e){}
+  document.getElementById('ico-moon').style.display = t === 'dark' ? '' : 'none';
+  document.getElementById('ico-sun').style.display  = t === 'dark' ? 'none' : '';
+}
+function toggleTheme(){
+  applyTheme(document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark');
+}
+(function(){
+  let t = null;
+  try{ t = localStorage.getItem('mint-theme'); }catch(e){}
+  if(!t) t = window.matchMedia
+       && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+  applyTheme(t);
+})();
+</script>
+</body>
+</html>

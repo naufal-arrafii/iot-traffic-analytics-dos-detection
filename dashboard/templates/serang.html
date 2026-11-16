@@ -1,0 +1,395 @@
+{% extends "base.html" %}
+{% block title %}Serangan (Uji) — MINT Dashboard{% endblock %}
+{% block content %}
+
+<div class="banner MENUNGGU" style="background:rgba(251,191,36,.09);border-color:rgba(251,191,36,.4);color:var(--amber)">
+  <span>&#9888;&#65039; Uji Skenario Serangan S1–S4 — hanya untuk jaringan lab terisolasi (PBL)</span>
+  <span class="scen">pengganti mengetik perintah di Serial Monitor</span>
+</div>
+
+<!-- v9.2.5: banner deteksi LIVE — akar perbaikan bug "S4 nilai berubah tanpa
+     warning": halaman ini dulu tidak menampilkan indikator deteksi sama sekali -->
+<div class="banner MENUNGGU" id="detbanner">
+  <span id="detmsg">MEMANTAU DETEKSI…</span>
+  <span class="scen" id="detscen"></span>
+</div>
+
+<div class="grid2s">
+  <div>
+    <h2 class="sec">Kendali Serangan
+      <a class="helpchip" href="/bantuan#serang">Panduan skenario →</a>
+    </h2>
+    <div class="panel">
+      <div class="skgrid" id="skgrid"><!-- kartu skenario diisi JS --></div>
+
+      <div class="param">
+        <label>Target node</label>
+        <select id="target" class="seltarget">
+          <option value="iot/suhu">ESP32-1 · DHT22 — iot/suhu</option>
+          <option value="iot/jarak">ESP32-2 · HC-SR04 — iot/jarak</option>
+          <option value="iot/kamera">ESP32-3 · ESP32-CAM — iot/kamera</option>
+          <option value="iot/cahaya">ESP32-4 · BH1750 — iot/cahaya</option>
+          <option value="__custom">Topik lain…</option>
+        </select>
+        <input id="targetCustom" placeholder="ketik topik kustom, mis. iot/suhu"
+               style="display:none">
+        <div class="hint">Pilih node yang mau diserang dari daftar (semua node
+          terdaftar tampil). S4 mengabaikan pilihan — menyerang 4 topik node
+          sekaligus.</div>
+
+        <div class="prow">
+          <div>
+            <label>Rate (pesan/detik)</label>
+            <input id="rate" type="number" min="1" max="500" value="100">
+          </div>
+          <div>
+            <label>Durasi (detik)</label>
+            <input id="duration" type="number" min="5" max="600" value="60">
+          </div>
+          <div id="sizewrap" style="display:none">
+            <label>Ukuran payload (KB, 1–512)</label>
+            <input id="size" type="number" min="1" max="512" value="250">
+            <div class="hint">S3: &gt;200 KB sesuai proposal (default acak
+              200–300 KB); kosongkan input rate (S3 kirim 1 pesan/dtk).</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="btnrow">
+        <button class="btn danger" id="btnStart" onclick="mulai()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+          MULAI SERANGAN</button>
+        <button class="btn" id="btnStop" onclick="stop()" disabled>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
+          STOP</button>
+        <span class="msg" id="amsg"></span>
+      </div>
+
+      <div class="status" id="astatus"><span class="empty">Belum ada serangan di sesi ini.</span></div>
+
+      <h3 style="font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin:14px 0 8px">Keluaran attack_sim.py (langsung)</h3>
+      <pre class="console" id="aoutput"><span class="t">— output akan muncul saat serangan berjalan —</span></pre>
+    </div>
+
+    <h2 class="sec">Riwayat Serangan</h2>
+    <div class="panel tscroll">
+      <table id="ahist"><thead><tr>
+        <th>Waktu</th><th>Kode</th><th>Target</th><th>Rate</th><th>Durasi</th><th>Status</th>
+      </tr></thead><tbody><tr><td colspan="6" class="empty">belum ada</td></tr></tbody></table>
+    </div>
+  </div>
+
+  <div>
+    <h2 class="sec">Deteksi Realtime
+      <a class="helpchip" href="/anomali">Dataset lengkap →</a>
+      <a class="helpchip" href="/pps">Grafik 1 dtk →</a>
+    </h2>
+    <div class="panel" id="detpanel">
+      <div id="detnodes" class="detnodes"><span class="empty">memuat status node…</span></div>
+      <h3 style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin:12px 0 6px">Event deteksi terbaru</h3>
+      <div class="log" id="detlog" style="max-height:200px"><div class="row"><span class="t">belum ada event</span></div></div>
+      <div class="hint" style="margin-top:8px">Panel ini memantau keluaran analyzer
+        (threshold median+3·MAD) setiap 2 detik — inilah yang menampilkan
+        <b>SERANGAN TERDETEKSI</b> saat skenario S1–S4 benar-benar memicu alert.</div>
+    </div>
+
+    <h2 class="sec">Tes Sistem
+      <button class="btn small" id="btnTest" onclick="tesSistem()">Jalankan Tes</button>
+    </h2>
+    <div class="panel" id="syscheck">
+      <div class="empty">Klik <b>Jalankan Tes</b> untuk memeriksa seluruh komponen:
+      broker MQTT, subscribe sensor, tshark, sumber metrik PPS/BPS, InfluxDB,
+      Grafana, dan Telegram.</div>
+    </div>
+
+    <h2 class="sec">Alur Uji Disarankan</h2>
+    <div class="panel">
+      <ol class="alur">
+        <li>Nyalakan <b>mulai_stack.bat</b> (broker; InfluxDB+Grafana bila mau grafik lengkap), lalu <b>jalankan_dashboard.bat</b>.</li>
+        <li>Tekan <b>Jalankan Tes</b> — pastikan minimal Broker + Subscribe + Sumber metrik hijau.</li>
+        <li>Pastikan node normal dulu 1–2 menit (baseline PPS kecil, banner NORMAL).</li>
+        <li>Pilih skenario (mis. <b>S1</b>) &rarr; atur rate/durasi &rarr; <b>MULAI SERANGAN</b>.</li>
+        <li>Pantau: banner berubah <b>SERANGAN TERDETEKSI</b>, grafik PPS Beranda melonjak, notifikasi Telegram masuk (PPS+BPS satu pesan), halaman Anomali terisi.</li>
+        <li>Setelah pulih (RECOVERY), dataset siap diekspor dari menu <b>Anomali &amp; Dataset</b>.</li>
+      </ol>
+      <div class="hint" style="margin-top:10px">Serangan dari halaman ini dijalankan <b>dari laptop server</b>. Untuk demo dua laptop (IP penyerang terpisah), jalankan <code>python scripts\attack_sim.py S1</code> di laptop penyerang.</div>
+    </div>
+  </div>
+</div>
+
+<style>
+  .grid2s{display:grid;grid-template-columns:1.5fr 1fr;gap:0 16px}
+  @media(max-width:960px){.grid2s{grid-template-columns:1fr}}
+  .skgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;margin-bottom:14px}
+  .sk{border:1px solid var(--line);border-radius:11px;padding:11px 12px;cursor:pointer;
+      background:var(--panel2);transition:.15s;position:relative}
+  .sk:hover{border-color:var(--cyan)}
+  .sk.sel{border-color:var(--red);background:rgba(239,68,68,.07)}
+  .sk b{font-size:14px;color:var(--text)}
+  .sk .kode{position:absolute;top:9px;right:10px;font-size:11px;font-weight:800;
+            background:rgba(239,68,68,.15);color:var(--red);border-radius:99px;padding:2px 9px}
+  .sk small{display:block;color:var(--muted);font-size:11px;margin-top:4px;line-height:1.45}
+  .param label{display:block;font-size:11.5px;font-weight:700;color:var(--muted);
+               text-transform:uppercase;letter-spacing:.8px;margin:10px 0 5px}
+  .param input, .param select{width:100%;padding:9px 11px;background:var(--input-bg);color:var(--text);
+        border:1px solid var(--input-line);border-radius:8px;font-size:13.5px;outline:none}
+  .param input:focus, .param select:focus{border-color:var(--cyan)}
+  .param select:disabled{opacity:.5}
+  #targetCustom{margin-top:6px}
+  .prow{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px}
+  .mono{font-family:Consolas,monospace;font-size:12px;white-space:nowrap}
+  .hint{font-size:11.5px;color:var(--muted);margin-top:6px;line-height:1.5}
+  .btnrow{display:flex;gap:10px;align-items:center;margin-top:16px;flex-wrap:wrap}
+  .btn.danger{background:linear-gradient(135deg,#ef4444,#b91c1c);color:#fff;border:none}
+  .btn.danger:hover{opacity:.92;color:#fff}
+  .btn:disabled{opacity:.45;cursor:not-allowed}
+  .status{margin-top:14px;border-top:1px solid var(--line);padding-top:12px;font-size:13px}
+  .status .run{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .status .dotr{width:10px;height:10px;border-radius:50%;background:var(--red);
+                animation:pulse 1.2s infinite}
+  .console{background:var(--input-bg);border:1px solid var(--line);border-radius:9px;
+           padding:10px 12px;font:11.5px/1.6 Consolas,'Courier New',monospace;
+           color:var(--text);max-height:210px;overflow-y:auto;white-space:pre-wrap;margin:0}
+  .console .t{color:var(--muted)}
+  .alur{padding-left:18px;font-size:13px;line-height:1.8;color:var(--text)}
+  .alur b{color:var(--cyan-strong)}
+  code{background:var(--cyan-dim);color:var(--cyan);border-radius:5px;padding:1px 6px;font-size:11.5px}
+  .chk{display:flex;justify-content:space-between;align-items:center;gap:10px;
+       padding:9px 2px;border-bottom:1px solid var(--line);font-size:13px}
+  .chk:last-child{border-bottom:none}
+  .chk .l{color:var(--text)}
+  .chk .note{display:block;font-size:11.5px;color:var(--muted);margin-top:2px}
+  /* ---- panel deteksi realtime (v9.2.5) ---- */
+  .detnodes{display:flex;gap:7px;flex-wrap:wrap}
+  .detnode{display:flex;align-items:center;gap:7px;border:1px solid var(--line);
+           background:var(--panel2);border-radius:9px;padding:6px 10px;font-size:12px}
+  .detnode .nd{width:8px;height:8px;border-radius:50%;background:var(--green);flex:none}
+  .detnode.off .nd{background:var(--muted)}
+  .detnode.alert{border-color:rgba(239,68,68,.55);background:rgba(239,68,68,.07)}
+  .detnode.alert .nd{background:var(--red);animation:pulse 1.1s infinite}
+  .detnode b{font-size:12px}
+  .detnode .dv{font-family:Consolas,monospace;color:var(--muted);font-size:11px}
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script>
+/* ============================ KENCAKALA SKENARIO ============================ */
+let SKEN = {}, pilihan = 'S1';
+
+function targetTerpilih(){
+  const v = $('target').value;
+  return v === '__custom' ? $('targetCustom').value.trim() : v;
+}
+
+async function muatSkenario(){
+  try{
+    const r = await jfetch('/api/attack/status');
+    const j = await r.json();
+    SKEN = j.skenario || {};
+    renderSkenario();
+    renderStatus(j);
+  }catch(e){}
+  muatTarget();
+}
+
+/* isi dropdown target dari node yang terdaftar di devices.json
+   (via /api/state) — nama + topik + status koneksi, selalu 4 pilihan */
+async function muatTarget(){
+  const sel = $('target');
+  const cur = sel.value;
+  try{
+    const r = await jfetch('/api/state');
+    const s = await r.json();
+    const nodes = Object.values(s.nodes || {})
+      .filter(n => n.registered && n.topic && n.topic !== '-')
+      .sort((a,b) => String(a.name).localeCompare(String(b.name), 'id'));
+    if(nodes.length){
+      sel.innerHTML = nodes.map(n =>
+        `<option value="${esc(n.topic)}">${esc(n.name)} · ${esc(n.sensor)} — ${esc(n.topic)}${n.presence==='ONLINE'?'':' (offline)'}</option>`
+      ).join('') + '<option value="__custom">Topik lain…</option>';
+      if([...sel.options].some(o => o.value === cur)) sel.value = cur;
+    }
+  }catch(e){ /* daftar statis bawaan tetap dipakai */ }
+  aturTarget();
+}
+
+function renderSkenario(){
+  $('skgrid').innerHTML = Object.entries(SKEN).map(([k, v]) => `
+    <div class="sk ${k===pilihan?'sel':''}" onclick="pilih('${k}')">
+      <span class="kode">${k}</span><b>${esc(v.nama.split('(')[0].trim())}</b>
+      <small>${esc(v.nama.includes('(')? '('+v.nama.split('(')[1] : '')}
+        default: ${v.rate}/s · ${v.duration} dtk</small>
+    </div>`).join('');
+  $('sizewrap').style.display = pilihan === 'S3' ? '' : 'none';
+  if(SKEN[pilihan]){
+    $('rate').value = SKEN[pilihan].rate;
+    $('duration').value = SKEN[pilihan].duration;
+  }
+  aturTarget();
+}
+
+/* aktif/nonaktifkan pilihan target mengikuti skenario */
+function aturTarget(){
+  const dis = pilihan === 'S4';
+  $('target').disabled = dis;
+  $('targetCustom').disabled = dis;
+  $('targetCustom').style.display =
+    ($('target').value === '__custom' && !dis) ? '' : 'none';
+}
+
+function pilih(k){ pilihan = k; renderSkenario(); }
+$('target').addEventListener('change', aturTarget);
+
+/* ============================ MULAI / STOP ============================ */
+async function mulai(){
+  const msg = $('amsg');
+  const target = targetTerpilih();
+  if(!target && pilihan !== 'S4'){
+    msg.className = 'msg err'; msg.textContent = 'Isi topik target dulu.';
+    return;
+  }
+  msg.className = 'msg info'; msg.textContent = 'Memulai…';
+  try{
+    const body = new URLSearchParams({
+      _csrf: CSRF, kode: pilihan,
+      target: target,
+      rate: $('rate').value, duration: $('duration').value, size: $('size').value
+    });
+    const r = await jfetch('/api/attack/start', {method: 'POST', body});
+    const j = await r.json();
+    msg.className = 'msg ' + (j.ok ? 'ok' : 'err');
+    msg.innerHTML = j.ok
+      ? (esc(j.msg || 'Berjalan.') + ' — pantau <a href="/" target="_blank" rel="noopener" style="color:var(--cyan)">Beranda</a> / <a href="/anomali" target="_blank" rel="noopener" style="color:var(--cyan)">Anomali</a>')
+      : esc(j.msg || 'Gagal.');
+    if(j.ok) tick();
+  }catch(e){ msg.className = 'msg err'; msg.textContent = 'Tidak dapat menghubungi server.'; }
+}
+
+async function stop(){
+  const msg = $('amsg');
+  msg.className = 'msg info'; msg.textContent = 'Menghentikan…';
+  try{
+    const r = await jfetch('/api/attack/stop', {
+      method: 'POST', body: new URLSearchParams({_csrf: CSRF})});
+    const j = await r.json();
+    msg.className = 'msg ' + (j.ok ? 'ok' : 'err');
+    msg.textContent = j.msg || '';
+  }catch(e){ msg.className = 'msg err'; msg.textContent = 'Tidak dapat menghubungi server.'; }
+}
+
+/* ============================ STATUS & RIWAYAT ============================ */
+function renderStatus(j){
+  const run = j.running, info = j.info;
+  $('btnStart').disabled = run;
+  $('btnStop').disabled = !run;
+  const st = $('astatus');
+  if(run && info){
+    const sisa = Math.max(0, Math.round((info.duration||0) - (info.elapsed||0)));
+    st.innerHTML = `<div class="run"><span class="dotr"></span>
+      <b>${esc(info.kode)}</b> ${esc(info.nama)} — berjalan ${info.elapsed}s
+      ${info.duration?`(sisa ±${sisa}s)`:''}
+      <span class="badge">target ${esc(info.target)}</span>
+      <span class="badge">${info.rate} pesan/s</span>
+      ${info.size?`<span class="badge">${info.size} KB/pesan</span>`:''}
+      ${info.start_str?`<span class="badge">mulai ${esc(info.start_str)}</span>`:''}
+      <a href="/" target="_blank" rel="noopener" class="badge" style="background:rgba(239,68,68,.15);color:var(--red)">lihat dampak di Beranda →</a>
+      <a href="/pps" target="_blank" rel="noopener" class="badge" style="background:rgba(239,68,68,.15);color:var(--red)">grafik PPS 1 dtk →</a>
+      </div>`;
+  } else if(info){
+    st.innerHTML = `<span>Serangan terakhir: <b>${esc(info.kode)}</b> —
+      <span class="pill ${info.status==='selesai'?'ok':'off'}">${esc(info.status)}</span>
+      ${info.elapsed?`(${info.elapsed} dtk)`:''}
+      ${info.start_str?`<span class="badge">${esc(info.start_str)}</span>`:''}
+      ${info.last_line?`<div class="hint">${esc(info.last_line)}</div>`:''}</span>`;
+  }
+  const out = (j.output || []).join('\n');
+  if(out) $('aoutput').textContent = out;
+  const hist = j.history || [];
+  if(hist.length){
+    $('ahist').querySelector('tbody').innerHTML = hist.map(h => `
+      <tr><td class="mono">${esc(h.start_str ||
+        new Date(h.start*1000).toLocaleString('id-ID'))}</td>
+      <td><b>${esc(h.kode)}</b></td><td>${esc(h.target)}</td>
+      <td>${h.rate}/s</td><td>${h.duration} dtk</td>
+      <td><span class="pill ${h.status==='selesai'?'ok':h.status==='berjalan'?'alert':'off'}">${esc(h.status)}</span></td></tr>`).join('');
+  }
+}
+
+/* ============================ TES SISTEM ============================ */
+async function tesSistem(){
+  const box = $('syscheck');
+  box.innerHTML = '<div class="empty">Menguji komponen…</div>';
+  try{
+    const r = await jfetch('/api/system/test');
+    const j = await r.json();
+    box.innerHTML = j.hasil.map(h => `
+      <div class="chk">
+        <span class="l">${esc(h.nama)}
+          <span class="note">${esc(h.catatan)}</span></span>
+        <span class="pill ${h.ok?'ok':'off'}">${h.ok?'OK':'MATI'}</span>
+      </div>`).join('') + `<div class="hint" style="margin-top:8px">
+        Diperiksa ${esc(j.waktu)} — Tes Sistem tidak mengirim pesan Telegram.</div>`;
+  }catch(e){
+    box.innerHTML = '<div class="empty">Gagal menghubungi server.</div>';
+  }
+}
+
+/* ============================ DETEKSI REALTIME (v9.2.5) ============================
+   Memantau /api/state (2 dtk): banner deteksi + status per node + log event.
+   Perbaikan bug "S4 multiburst: nilai berubah tapi tidak ada warning" —
+   sebelumnya halaman ini hanya memantau status serangan (attack_sim), bukan
+   HASIL deteksi analyzer, sehingga alert tidak pernah terlihat di sini. */
+async function deteksiTick(){
+  try{
+    const r = await jfetch('/api/state');
+    const s = await r.json();
+    const b = $('detbanner');
+    const atk = s.attack || {};
+    if(s.system === 'SERANGAN TERDETEKSI'){
+      b.className = 'banner SERANGAN';
+      const nAl = Object.values(s.nodes).filter(n=>n.status==='ALERT').length;
+      $('detmsg').textContent = `⚠ SERANGAN TERDETEKSI — ${nAl} node ALERT`;
+      $('detscen').textContent = s.scenario ? '→ '+s.scenario : 'cek panel di bawah';
+    } else if(s.system === 'NORMAL'){
+      b.className = 'banner NORMAL';
+      $('detmsg').textContent = 'NORMAL — tidak ada serangan terdeteksi';
+      $('detscen').textContent = atk.running ? 'uji berjalan, belum memicu alert' : '';
+    } else {
+      b.className = 'banner MENUNGGU';
+      $('detmsg').textContent = 'MEMANTAU DETEKSI… menunggu data analyzer';
+      $('detscen').textContent = '';
+    }
+    const nodes = Object.values(s.nodes).sort((a,c)=>String(a.name).localeCompare(String(c.name),'id'));
+    $('detnodes').innerHTML = nodes.map(n => `
+      <span class="detnode ${n.status==='ALERT'?'alert':(n.presence==='ONLINE'?'':'off')}"
+            title="${esc(n.sensor)} · ${esc(n.topic)}">
+        <span class="nd"></span><b>${esc(n.name)}</b>
+        <span class="dv">${Math.round((n.pps_15s||0)*10)/10} pps</span>
+        ${n.status==='ALERT' ? '<span class="pill alert">ALERT</span>'
+          : n.presence==='ONLINE' ? '' : '<span class="pill off">OFF</span>'}
+      </span>`).join('') || '<span class="empty">belum ada node</span>';
+    $('detlog').innerHTML = (s.alerts||[]).slice().reverse().slice(0,12).map(a => `
+      <div class="row ${a.kind}">
+        <div class="t">${esc(a.time)} · ${esc(a.device)}</div>
+        <b>${esc(a.type)}</b> ${esc(a.metric)} = ${fmt(a.value)} &gt; thr ${fmt(a.threshold)}
+        <span class="tag">(${a.ratio}x)</span>
+      </div>`).join('') || '<div class="row"><span class="t">belum ada event</span></div>';
+    window._setFooter(s);
+  }catch(e){ /* biarkan isi terakhir */ }
+}
+deteksiTick();
+setInterval(deteksiTick, 2000);
+
+/* ============================ POLL ============================ */
+async function tick(){
+  try{
+    const r = await jfetch('/api/attack/status');
+    renderStatus(await r.json());
+  }catch(e){}
+}
+muatSkenario();
+tick();
+setInterval(tick, 2000);
+</script>
+{% endblock %}

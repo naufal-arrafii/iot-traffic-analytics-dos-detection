@@ -1,0 +1,60 @@
+# MINT - Tumpukan infrastruktur (arsitektur hybrid)
+# Mosquitto + InfluxDB + Grafana berjalan di Docker Desktop;
+# tshark, analyzer Python, dan Flask dashboard berjalan di host Windows.
+# Jalankan:  docker compose up -d
+
+services:
+  mosquitto:
+    image: eclipse-mosquitto:2
+    container_name: mint-mosquitto
+    restart: unless-stopped
+    ports:
+      - "1883:1883"
+    volumes:
+      - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - mosquitto_data:/mosquitto/data
+      - mosquitto_log:/mosquitto/log
+
+  influxdb:
+    image: influxdb:2.7
+    container_name: mint-influxdb
+    restart: unless-stopped
+    ports:
+      - "8086:8086"
+    environment:
+      - DOCKER_INFLUXDB_INIT_MODE=setup
+      - DOCKER_INFLUXDB_INIT_USERNAME=mint
+      - DOCKER_INFLUXDB_INIT_PASSWORD=mintpass123
+      - DOCKER_INFLUXDB_INIT_ORG=mint
+      - DOCKER_INFLUXDB_INIT_BUCKET=traffic
+      - DOCKER_INFLUXDB_INIT_ADMIN_TOKEN=mint-super-secret-token-change-me
+    volumes:
+      - influxdb_data:/var/lib/influxdb2
+
+  grafana:
+    image: grafana/grafana:11.1.0
+    container_name: mint-grafana
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=mintadmin
+      # v8.1: izinkan dashboard MINT menampilkan Grafana lewat iframe (menu
+      # Grafana) tanpa login — akses hanya-baca (Viewer) dari jaringan lokal
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Viewer
+      - GF_ALLOW_EMBEDDING=true
+      # v9.2.6: refresh 1-2 dtk (default Grafana minimal 5 dtk = terasa 'ngestak')
+      - GF_DASHBOARDS_MIN_REFRESH_INTERVAL=1s
+      # buka langsung ke dashboard MINT (tanpa cari di folder)
+      - GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH=/etc/grafana/provisioning/dashboards/mint-traffic.json
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning
+
+volumes:
+  mosquitto_data:
+  mosquitto_log:
+  influxdb_data:
+  grafana_data:

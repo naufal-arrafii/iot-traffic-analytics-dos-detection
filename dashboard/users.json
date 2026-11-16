@@ -1,0 +1,30 @@
+{
+  "users": [
+    {
+      "username": "admin",
+      "password_hash": "scrypt:32768:8:1$H20MKo0uwaehxRnu$092cfeda197763a061a6056199b6e6d79d8ff5dd2e8594d8e8287d016ff4ae0df72ea58fa4cfeb09f6e4b0dd77a23a671a7747e50f8e2d0411fff5c01cfdbfdd",
+      "role": "admin",
+      "diubah": "2026-10-04 15:33:54"
+    },
+    {
+      "username": "faizul",
+      "password_hash": "scrypt:32768:8:1$GYrSyEpMnr9u4CGI$b28ac194175a192730c7488d0759670d4a4177d18105294bb80bf457b4981aa56cf03991d308166475e0a0b582d80684f270fbc172a64cdb5c7147b06b86a45c",
+      "role": "operator"
+    },
+    {
+      "username": "mahdi",
+      "password_hash": "scrypt:32768:8:1$2DbPbTaUzaKPmudH$376ab10979d12872adfbcace87615d718a84a8423af9054ad64357b39cae7bdaf70b41d98da858800c195f627317a1c091d524adca256fb2a06206e397bccefa",
+      "role": "operator"
+    },
+    {
+      "username": "naufal",
+      "password_hash": "scrypt:32768:8:1$9o1uRPucnQBRePOm$2ce89df0b6d28122fa65b0b73dba6e8b1b9c6b9abd85200525dd7d44ca1032504db185072b92f3c016b41570e81f5ffb9b8cc3bab023fbccfca87edba603cd1b",
+      "role": "operator"
+    },
+    {
+      "username": "steven",
+      "password_hash": "scrypt:32768:8:1$mgOVTc1mB8TLcdej$edc8a40141b42d006fe892da0998ce59c5251b8e1abcd3df38b1db0b76e0c9281b08fc1eb1ae624478cecc601e5270add670728a3214a8aa4082f4d8f3a4d09c",
+      "role": "operator"
+    }
+  ]
+}

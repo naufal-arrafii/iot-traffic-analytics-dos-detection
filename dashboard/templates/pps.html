@@ -1,0 +1,375 @@
+{% extends "base.html" %}
+{% block title %}Grafik PPS — MINT Dashboard{% endblock %}
+{% block content %}
+
+<div id="banner" class="banner MENUNGGU">
+  <span id="sysmsg">MENUNGGU DATA…</span>
+  <span class="scen" id="scen"></span>
+</div>
+
+<div class="statstrip">
+  <div class="st"><span class="l">Total PPS</span><b id="spps" class="cy">–</b></div>
+  <div class="st"><span class="l">Total B/s</span><b id="sbps" class="cy">–</b></div>
+  <div class="st"><span class="l">Node online</span><b id="son">–</b></div>
+  <div class="st"><span class="l">Sumber metrik</span><b id="ssrc" style="font-size:11.5px">–</b></div>
+  <div class="st live"><span class="dotg"></span> refresh 1 dtk</div>
+</div>
+
+<h2 class="sec">Grafik Realtime
+  <a class="helpchip" href="/bantuan#metrik">Pelajari metrik →</a>
+  <a class="helpchip" href="/serang">Uji serangan →</a>
+</h2>
+
+<div class="cgrid">
+  <div class="panel cpanel">
+    <div class="chead"><b>Packet Rate per Perangkat (PPS)</b>
+      <span class="cmax" id="maxpps"></span></div>
+    <canvas id="cPps" class="cbox"></canvas>
+    <div class="legend" id="lPps"><span class="li">menunggu data…</span></div>
+  </div>
+
+  <div class="panel cpanel">
+    <div class="chead"><b>Byte Rate per Perangkat (B/s)</b>
+      <span class="cmax" id="maxbps"></span></div>
+    <canvas id="cBps" class="cbox"></canvas>
+    <div class="legend" id="lBps"><span class="li">menunggu data…</span></div>
+  </div>
+
+  <div class="panel cpanel">
+    <div class="chead"><b>Distribusi Trafik per Node (B/s)</b>
+      <span class="cmax" id="dtot"></span></div>
+    <canvas id="cDis" class="cbox sm"></canvas>
+    <div class="legend" id="lDis"><span class="li">menunggu data…</span></div>
+  </div>
+
+  <div class="panel cpanel">
+    <div class="chead"><b>Rata-rata Ukuran Paket per Node (B/pesan)</b>
+      <span class="cmax" id="maxavg"></span></div>
+    <canvas id="cAvg" class="cbox"></canvas>
+    <div class="legend" id="lAvg"><span class="li">menunggu data…</span></div>
+  </div>
+</div>
+
+<h2 class="sec">Tabel Node Realtime
+  <a class="helpchip" href="/nodes">Detail tiap node →</a>
+</h2>
+<div class="panel tscroll">
+  <table>
+    <thead><tr><th>Node</th><th>Sensor</th><th>IP</th><th>Topik</th>
+      <th>PPS</th><th>B/s</th><th>B/pesan</th><th>Total pesan</th><th>Status</th></tr></thead>
+    <tbody id="trows"><tr><td colspan="9" class="empty">memuat…</td></tr></tbody>
+  </table>
+</div>
+
+<style>
+  /* ---- strip statistik ---- */
+  .statstrip{display:flex;gap:10px;flex-wrap:wrap;margin:14px 0 4px}
+  .st{background:var(--panel);border:1px solid var(--line);border-radius:10px;
+      padding:8px 14px;display:flex;align-items:center;gap:9px}
+  .st .l{color:var(--muted);font-size:11px}
+  .st b{font-size:16px}
+  .st b.cy{color:var(--cyan-strong)}
+  .st.live{border-color:rgba(52,211,153,.4)}
+  .st.live .dotg{width:8px;height:8px;border-radius:50%;background:var(--green);
+                 animation:beat 1.4s infinite}
+  @keyframes beat{50%{opacity:.35}}
+
+  /* ---- grid 4 panel (2x2 seperti referensi) ---- */
+  .cgrid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:12px}
+  @media(max-width:980px){.cgrid{grid-template-columns:1fr}}
+  .cpanel{padding:12px 14px}
+  .chead{display:flex;justify-content:space-between;align-items:baseline;gap:10px;
+         margin-bottom:8px}
+  .chead b{font-size:13.5px}
+  .cmax{color:var(--muted);font-size:11px;font-family:Consolas,monospace}
+  .cbox{width:100%;height:235px;display:block}
+  .cbox.sm{height:205px}
+
+  .legend{display:flex;gap:6px 14px;flex-wrap:wrap;font-size:12px;color:var(--muted);
+          margin-top:8px}
+  .legend .li{display:flex;align-items:center;gap:6px}
+  .legend .sw{width:10px;height:10px;border-radius:3px;display:inline-block;flex:none}
+  .legend .v{font-family:Consolas,monospace;color:var(--text);font-weight:600}
+  .legend .v.hot{color:var(--red)}
+  .mono{font-family:Consolas,monospace;font-size:12px}
+  td.num,th.num{text-align:right;font-family:Consolas,monospace}
+  td.num.hot{color:var(--red);font-weight:700}
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script>
+/* ============================ GRAFIK PPS REALTIME (v8.3) ============================
+   4 panel seperti referensi: PPS, Byte/s, doughnut distribusi, ukuran paket.
+   Data instan (jendela 1 dtk) dari /api/state — refresh 1 detik. */
+const PALETTE = ['#22d3ee','#f97316','#a78bfa','#34d399','#f472b6','#facc15','#60a5fa','#fb7185'];
+const colorOf = {};
+let colorIdx = 0;
+function nodeColor(ip){
+  if(!colorOf[ip]) colorOf[ip] = PALETTE[colorIdx++ % PALETTE.length];
+  return colorOf[ip];
+}
+const MAXPTS = 60;              // 60 titik x 1 dtk = riwayat 1 menit
+let hist = [];                  // [{t, rows:[{ip,name,pps,bps,avg}]}]
+let THR = 0;                    // threshold pps (min antar node) utk garis putus
+let THRB = 0, THRA = 0;         // v9.2.5: threshold bps & ukuran paket (garis putus)
+const TICK_MS = 1000;           // interval poll /api/state
+const GROW_MS = 650;            // durasi titik baru "tumbuh"
+let lastTick = 0;               // penanda animasi (ditandai tiap data masuk)
+let disTarget = [];             // doughnut: target slice tiap tick
+let disCenter = ['', ''];       // doughnut: teks tengah
+const fmtAxis = n => n >= 1048576 ? (n/1048576).toFixed(1)+'M'
+                   : n >= 1024 ? (n/1024).toFixed(1)+'K' : String(Math.round(n));
+const hhmmss = t => new Date(t*1000).toLocaleTimeString('id-ID',{hour12:false});
+
+/* ---------- setup canvas dgn devicePixelRatio (via MINTS) ---------- */
+function ctxOf(id){
+  return MINTS.prep($(id));
+}
+
+/* ---------- grafik garis generik HALUS (spline+glow+gradient+animasi) ---------- */
+function drawLine(id, key, unit, threshold){
+  const c = ctxOf(id);
+  if(!c) return;
+  const {ctx, w, h} = c;
+  if(hist.length < 2){
+    ctx.fillStyle = cssVar('--chart-text'); ctx.font = '12px Segoe UI';
+    ctx.fillText('menunggu data metrik…', 12, 26);
+    return;
+  }
+  const padL=44, padR=52, padT=16, padB=22;
+  /* ---- fase animasi mengalir ---- */
+  const nowMs = performance.now();
+  const p    = lastTick ? Math.min((nowMs - lastTick)/TICK_MS, 1) : 1;
+  const grow = lastTick ? MINTS.easeOut(Math.min((nowMs - lastTick)/GROW_MS, 1)) : 1;
+  let maxv = 1;
+  hist.forEach(pt => pt.rows.forEach(r => { if(r[key] > maxv) maxv = r[key]; }));
+  if(threshold && threshold > maxv) maxv = threshold;
+  maxv = Math.max(Math.ceil(maxv*1.15), 4);
+  const I = TICK_MS/1000;
+  const t0 = hist[0].t, t1 = hist[hist.length-1].t;
+  const vis1 = t1 + I*p;
+  const span = Math.max(vis1 - t0, 0.001);
+  const X = t => padL + (w-padL-padR) * (t-t0)/span;
+  const Y = v => padT + (h-padT-padB) * (1 - v/maxv);
+
+  // grid + label sumbu Y
+  ctx.font = '10px Consolas, monospace';
+  for(let g=0; g<=4; g++){
+    const v = maxv*g/4, y = Y(v);
+    ctx.strokeStyle = cssVar('--chart-grid');
+    ctx.beginPath(); ctx.moveTo(padL,y); ctx.lineTo(w-padR,y); ctx.stroke();
+    ctx.fillStyle = cssVar('--chart-text');
+    ctx.fillText(fmtAxis(v), 6, y+3);
+  }
+  // label sumbu X (4 titik waktu, ikut mengalir)
+  ctx.fillStyle = cssVar('--chart-text');
+  for(let g=0; g<=3; g++){
+    const t = t0 + span*g/3, x = X(t);
+    const s = hhmmss(t);
+    ctx.fillText(s, Math.min(Math.max(x-26, padL-20), w-padR-52), h-6);
+  }
+  // garis threshold putus-putus (hanya panel PPS)
+  if(threshold && threshold > 0 && threshold < maxv){
+    const y = Y(threshold);
+    ctx.strokeStyle = MINTS.hexA(cssVar('--red'), 0.75); ctx.setLineDash([6,5]); ctx.lineWidth = 1.2;
+    ctx.beginPath(); ctx.moveTo(padL,y); ctx.lineTo(w-padR,y); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = cssVar('--red'); ctx.font = '10px Segoe UI';
+    ctx.fillText('thr ' + fmtAxis(threshold), w-padR+4, y+3);
+  }
+  // kurva per node: EMA + spline monoton + glow + area gradient + titik denyut
+  const series = {};
+  hist.forEach(pt => pt.rows.forEach(r => { (series[r.ip] = series[r.ip]||[]).push([pt.t, r[key]]); }));
+  let maxSeen = 0;
+  Object.entries(series).forEach(([ip, arr]) => {
+    if(arr.length < 2) return;
+    const col = nodeColor(ip);
+    let ysData = MINTS.ema(arr.map(pp => pp[1]), 0.55);  // satuan data (utk label)
+    let ys = ysData.map(Y);                              // versi piksel utk kanvas
+    let xs = arr.map(pp => X(pp[0]));
+    if(grow < 1){
+      const tg = MINTS.lerp(arr[arr.length-2][0], arr[arr.length-1][0], grow);
+      const ydg = MINTS.lerp(ysData[ysData.length-2], ysData[ysData.length-1], grow);
+      ysData[ysData.length-1] = ydg;
+      ys[ys.length-1] = Y(ydg);
+      xs[xs.length-1] = X(tg);
+    }
+    MINTS.fillUnder(ctx, xs, ys, h-padB, col, 0.14);
+    MINTS.strokeGlow(ctx, xs, ys, col, 2.1);
+    const ex = xs[xs.length-1], ey = ys[ys.length-1];
+    const evData = ysData[ysData.length-1];
+    if(evData > maxSeen) maxSeen = evData;
+    MINTS.dot(ctx, ex, ey, col, nowMs/1000, 3);
+    // nilai terkini di ujung garis (ikut animasi)
+    ctx.font = 'bold 10px Consolas, monospace';
+    ctx.fillStyle = col;
+    ctx.fillText(fmtAxis(evData), ex+6, ey+3);
+  });
+  return maxSeen;
+}
+
+/* ---------- doughnut distribusi trafik (animasi lerp + ujung bulat) ---------- */
+const dispDis = {};                 // ip -> nilai tampilan (di-lerp tiap frame)
+function drawDoughnut(id, entries, centerTop, centerBot){
+  const c = ctxOf(id);
+  if(!c) return;
+  const {ctx, w, h} = c;
+  const cx = w*0.32, cy = h/2, R = Math.min(h,w*0.6)/2 - 12;
+  // haluskan perpindahan nilai (lerp eksponensial per frame)
+  entries.forEach(e => {
+    const d = dispDis[e.ip] || (dispDis[e.ip] = {v: 0});
+    d.v = MINTS.lerp(d.v, e.v, 0.16);
+    if(Math.abs(d.v - e.v) < e.v*0.004) d.v = e.v;
+  });
+  const anim = entries.map(e => ({v: dispDis[e.ip].v, col: e.col}));
+  const total = anim.reduce((s,e) => s+e.v, 0);
+  if(!total){
+    ctx.strokeStyle = cssVar('--chart-grid'); ctx.lineWidth = 18;
+    ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.arc(cx, cy, R-9, 0, 7); ctx.stroke();
+    ctx.lineCap = 'butt';
+    ctx.fillStyle = cssVar('--chart-text'); ctx.font = '12px Segoe UI';
+    ctx.fillText('menunggu trafik…', cx-52, cy+4);
+    return;
+  }
+  // cincin berujung bulat dgn celah kecil (gaya fitness-ring)
+  const gapRad = 4.5/(R-9) + 0.012;
+  let a = -Math.PI/2;
+  ctx.lineCap = 'round';
+  anim.forEach(e => {
+    const sweep = Math.max((e.v/total)*Math.PI*2, 0.0001);
+    const g = anim.length > 1 ? Math.min(gapRad, sweep/3) : 0;
+    ctx.strokeStyle = e.col; ctx.lineWidth = 19;
+    ctx.beginPath(); ctx.arc(cx, cy, R-9, a+g, a+sweep-g); ctx.stroke();
+    a += sweep;
+  });
+  ctx.lineCap = 'butt';
+  const shown = anim.reduce((s,e) => s+e.v, 0);
+  ctx.fillStyle = cssVar('--text'); ctx.textAlign = 'center';
+  ctx.font = 'bold 15px Segoe UI';
+  ctx.fillText(centerTop, cx, cy-2);
+  ctx.fillStyle = cssVar('--muted'); ctx.font = '10px Segoe UI';
+  ctx.fillText(centerBot, cx, cy+13);
+  ctx.textAlign = 'left';
+}
+
+/* ---------- legenda dgn nilai live ---------- */
+function legendHTML(rows, key, fmtV, hotWhen){
+  return rows.map(r => {
+    const v = r[key] || 0;
+    return `<span class="li"><span class="sw" style="background:${nodeColor(r.ip)}"></span>` +
+      `${esc(r.name)} <span class="v ${hotWhen&&hotWhen(r)?'hot':''}">${fmtV(v)}</span></span>`;
+  }).join('') || '<span class="li">menunggu data…</span>';
+}
+
+/* ============================ POLL UTAMA (1 detik) ============================ */
+async function tick(){
+  try{
+    const r = await jfetch('/api/state');
+    const s = await r.json();
+
+    // banner + strip statistik
+    const b = $('banner'), atk = s.attack || {};
+    if(atk.running){
+      b.className = 'banner SERANGAN';
+      $('sysmsg').textContent = `UJI SERANGAN ${atk.kode} BERJALAN (${atk.elapsed||0} dtk)`;
+      $('scen').textContent = 'pantau lonjakan PPS/BPS pada grafik di bawah';
+    } else {
+      b.className = 'banner ' + (s.system==='SERANGAN TERDETEKSI'?'SERANGAN':
+                                 s.system==='NORMAL'?'NORMAL':'MENUNGGU');
+      $('sysmsg').textContent = s.system;
+      $('scen').textContent = s.system==='MENUNGGU DATA'
+        ? 'menunggu pesan pertama dari node / analyzer' : '';
+    }
+    $('spps').textContent = (s.global.pps_15s != null ? s.global.pps_15s : s.global.pps) ?? '–';
+    $('sbps').textContent = fmtRate(s.global.bps_15s != null ? s.global.bps_15s : s.global.bps);
+    $('son').textContent = `${s.global.online}/${s.global.devices}`;
+    $('ssrc').textContent = (s.metric_source||{}).label || '–';
+
+    // baris data node — v9.2.5: grafik memakai jendela 15 dtk (stabil antar
+    // detik namun responsif 1-2 dtk terhadap S1/S3/S4; nilai instan murni
+    // membuat garis loncat 0<->nilai tiap node Publish tiap 10 dtk)
+    const rows = Object.values(s.nodes)
+      .map(n => ({ip:n.ip, name:n.name, sensor:n.sensor, topic:n.topic,
+                  pps:n.pps_15s||0, bps:n.bps_15s||0, avg:n.avg_pkt_size_15s||0,
+                  total:n.total_publish||0, on:n.presence==='ONLINE',
+                  alert:n.status==='ALERT', thr:(n.thresholds||{}).pps||0,
+                  thrB:(n.thresholds||{}).bps||0, thrA:(n.thresholds||{}).avg_pkt_size||0}))
+      .sort((a,c) => a.name.localeCompare(c.name, 'id'));
+    hist.push({t: Date.now()/1000, rows});
+    if(hist.length > MAXPTS) hist.shift();
+    lastTick = performance.now();          // mulai animasi titik baru
+
+    // threshold garis putus: min antar node yang punya threshold (v9.2.5:
+    // kini di TIGA panel — PPS, B/s, dan ukuran paket — dan otomatis ikut
+    // berubah saat threshold diedit di menu Pengaturan)
+    const thrs = rows.map(r => r.thr).filter(v => v > 0);
+    THR = thrs.length ? Math.min(...thrs) : 0;
+    const thrB = rows.map(r => r.thrB).filter(v => v > 0);
+    THRB = thrB.length ? Math.min(...thrB) : 0;
+    const thrA = rows.map(r => r.thrA).filter(v => v > 0);
+    THRA = thrA.length ? Math.min(...thrA) : 0;
+
+    // 4 panel
+    const mp = drawLine('cPps', 'pps', '', THR);
+    drawLine('cBps', 'bps', '', THRB);
+    drawLine('cAvg', 'avg', '', THRA);
+    $('maxpps').textContent = mp!=null ? `puncak ${fmtAxis(mp)} pesan/dtk` : '';
+    let mb = 0, ma = 0;
+    hist.forEach(pt => pt.rows.forEach(r => { if(r.bps>mb) mb=r.bps; if(r.avg>ma) ma=r.avg; }));
+    $('maxbps').textContent = mb ? `puncak ${fmtRate(mb)}` : '';
+    $('maxavg').textContent = ma ? `maks ${fmt(ma)}/pesan` : '';
+
+    const drows = rows.filter(r => r.bps > 0).sort((a,c) => c.bps-a.bps).slice(0,6);
+    const dtot = drows.reduce((s2,r) => s2+r.bps, 0);
+    // target doughnut disimpan — penggambaran tiap frame di rAF (lerp halus)
+    disTarget = drows.map(r => ({ip: r.ip, v: r.bps, col: nodeColor(r.ip)}));
+    disCenter = [fmtRate(dtot), 'total trafik (15 dtk)'];
+    $('dtot').textContent = drows.length ? `${drows.length} node aktif` : '';
+
+    // legenda dgn nilai live
+    $('lPps').innerHTML = legendHTML(rows, 'pps',
+      v => (Math.round(v*10)/10), r => THR && r.pps > THR);
+    $('lBps').innerHTML = legendHTML(rows, 'bps', v => fmtRate(v),
+      r => THRB && r.bps > THRB);
+    $('lAvg').innerHTML = legendHTML(rows, 'avg', v => fmt(v),
+      r => THRA && r.avg > THRA);
+    $('lDis').innerHTML = drows.length ? drows.map(r =>
+      `<span class="li"><span class="sw" style="background:${nodeColor(r.ip)}"></span>` +
+      `${esc(r.name)} <span class="v">${dtot ? Math.round(r.bps/dtot*100) : 0}%</span> · ${fmtRate(r.bps)}</span>`).join('')
+      : '<span class="li">menunggu data…</span>';
+
+    // tabel node realtime
+    $('trows').innerHTML = rows.map(r => `
+      <tr class="${r.alert?'alert-row':''}">
+        <td style="font-weight:600">${esc(r.name)}</td>
+        <td>${esc(r.sensor)}</td>
+        <td class="mono">${esc(r.ip)}</td>
+        <td class="mono">${esc(r.topic)}</td>
+        <td class="num ${THR && r.pps > THR ? 'hot':''}">${r.pps}</td>
+        <td class="num ${THRB && r.bps > THRB ? 'hot':''}">${fmtRate(r.bps)}</td>
+        <td class="num ${THRA && r.avg > THRA ? 'hot':''}">${r.avg ? fmt(r.avg) : '–'}</td>
+        <td class="num">${r.total.toLocaleString('id-ID')}</td>
+        <td>${r.alert ? '<span class="pill alert">ALERT</span>'
+            : r.on ? '<span class="pill ok">ONLINE</span>'
+                   : '<span class="pill off">OFFLINE</span>'}</td>
+      </tr>`).join('') || '<tr><td colspan="9" class="empty">belum ada node</td></tr>';
+
+    window._setFooter(s);
+  }catch(e){ /* biarkan isi terakhir */ }
+}
+
+(function loop(){
+  tick().finally(() => setTimeout(loop, 1000));
+})();
+/* render 60fps: aliran mengalir + titik tumbuh + denyut — bukan lompatan 1 dtk */
+MINTS.rafLoop(() => {
+  const mp = drawLine('cPps', 'pps', '', THR);
+  drawLine('cBps', 'bps', '', THRB);
+  drawLine('cAvg', 'avg', '', THRA);
+  $('maxpps').textContent = mp!=null ? `puncak ${fmtAxis(mp)} pesan/dtk` : '';
+  if(disTarget.length) drawDoughnut('cDis', disTarget, disCenter[0], disCenter[1]);
+});
+</script>
+{% endblock %}

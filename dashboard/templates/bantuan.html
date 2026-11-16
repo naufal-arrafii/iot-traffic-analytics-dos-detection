@@ -1,0 +1,388 @@
+{% extends "base.html" %}
+{% block title %}Bantuan — MINT Dashboard{% endblock %}
+{% block content %}
+
+<h2 class="sec">Bantuan &amp; Panduan</h2>
+<p style="color:var(--muted);font-size:13px;margin:-6px 0 16px">
+  Panduan lengkap memakai dashboard MINT — dari menyalakan stack sampai menarik
+  dataset anomali untuk laporan.
+</p>
+
+<!-- ================= PANDUAN CEPAT ================= -->
+<div class="panel" id="panduan" style="margin-bottom:16px">
+  <h3>Panduan Cepat (5 langkah)</h3>
+  <div class="steps">
+    <div class="step"><span class="no">1</span>
+      <div><b>Nyalakan stack server</b> — klik dua kali <code>mulai_stack.bat</code>.
+      Docker Desktop akan menjalankan Mosquitto (broker MQTT), InfluxDB, dan Grafana.
+      Tunggu ±30 detik, lalu cek <code>cek_lingkungan.bat</code> sampai semua centang hijau.</div></div>
+    <div class="step"><span class="no">2</span>
+      <div><b>Buka dashboard</b> — klik <code>jalankan_dashboard.bat</code> lalu akses
+      <code>http://localhost:5000</code>. Masuk dengan akun Anda (bawaan:
+      <code>admin / mintadmin</code>).</div></div>
+    <div class="step"><span class="no">3</span>
+      <div><b>Nyalakan perangkat ESP32</b> — begitu node menyala dan publish ke broker,
+      kartu node di <b>Beranda</b> menyala hijau dan nilai sensor (suhu, jarak, cahaya,
+      foto) tampil realtime. Belum punya perangkat? Uji dengan
+      <code>python scripts/test_publish.py --foto</code>.</div></div>
+    <div class="step"><span class="no">4</span>
+      <div><b>Jalankan analyzer</b> — klik <code>jalankan_analyzer.bat</code> (atau
+      <code>jalankan_demo.bat</code> untuk mode demo tanpa perangkat). Analyzer menghitung
+      PPS/BPS per detik dan membandingkannya dengan threshold hasil kalibrasi.</div></div>
+    <div class="step"><span class="no">5</span>
+      <div><b>Pantau &amp; tarik dataset</b> — serangan (flooding, payload besar) memunculkan
+      banner merah <b>SERANGAN TERDETEKSI</b>. Buka halaman <b>Anomali &amp; Dataset</b>
+      lalu klik tombol <b>Unduh</b> untuk menyimpan CSV/JSON bukti pengujian.</div></div>
+  </div>
+</div>
+
+<!-- ================= MENU ================= -->
+<div class="panel" style="margin-bottom:16px">
+  <h3>Menu &amp; Halaman</h3>
+  <div class="tscroll">
+    <table>
+      <thead><tr><th>Halaman</th><th>Isinya</th><th>Kapan dibuka</th></tr></thead>
+      <tbody>
+        <tr><td><b>Beranda</b></td>
+            <td>Ringkasan sistem: status, node terhubung, PPS/BPS total, ukuran payload
+                rata-rata (responsif S3), alert aktif, kartu node dengan angka PPS besar
+                + nilai sensor live + IP &amp; topik, grafik PPS 15 dtk (legenda bernilai
+                + garis threshold), log deteksi.</td>
+            <td>Pemantauan harian / sekilas kondisi jaringan.</td></tr>
+        <tr><td><b>Node</b></td>
+            <td>Detail tiap node: pembacaan sensor realtime, foto live kamera,
+                grafik PPS 15 dtk, threshold per metrik, identitas (IP/MAC/topik/PIC),
+                riwayat event.</td>
+            <td>Memeriksa satu perangkat lebih dalam.</td></tr>
+        <tr><td><b>Anomali &amp; Dataset</b></td>
+            <td>Semua window yang melebihi threshold + event ALERT/RECOVERY +
+                daftar berkas dataset, lengkap dengan tombol unduh CSV/JSON.</td>
+            <td>Setelah sesi pengujian, untuk mengambil bukti/data laporan.</td></tr>
+        <tr><td><b>Grafik PPS</b></td>
+            <td>4 panel realtime refresh 1 detik: PPS per perangkat, Byte/s, doughnut
+                distribusi trafik (persentase per node), rata-rata ukuran paket —
+                ketiganya dgn <b>garis threshold</b> yang ikut berubah saat threshold
+                diedit + tabel node (IP, topik, total pesan).</td>
+            <td>Saat uji serangan — melihat lonjakan secara langsung.</td></tr>
+        <tr><td><b>Serangan (Uji)</b></td>
+            <td>Kendali skenario S1–S4 dari web + <b>panel Deteksi Realtime</b>
+                (banner status, node ALERT, log event) + Tes Sistem satu klik.</td>
+            <td>Menjalankan uji serangan &amp; langsung melihat hasil deteksinya.</td></tr>
+        <tr><td><b>Sesi &amp; Dataset</b> <span class="badge">BARU v9.2.5</span></td>
+            <td>Rekam sesi berlabel: <b>PCAP valid + dataset CSV</b> otomatis dari
+                trafik broker — tanpa Wireshark/tshark, tanpa hak admin; ukuran
+                PCAP tumbuh live; berkas bisa diunduh dari halaman yang sama.</td>
+            <td>Merekam BASE utk kalibrasi &amp; sesi S1–S4 utk laporan.</td></tr>
+        <tr><td><b>Server</b></td>
+            <td>Pemakaian CPU/RAM/disk/jaringan, status Mosquitto-InfluxDB-Grafana,
+                hasil ping node, log sistem.</td>
+            <td>Cek kesehatan server / saat ada layanan mati.</td></tr>
+        <tr><td><b>Log Sistem</b> <span class="badge">BARU v9.2.5</span></td>
+            <td>Gabungan log internal dashboard, event deteksi, riwayat serangan
+                dan sesi — dengan kotak saringan + tombol unduh .txt.</td>
+            <td>Menelusuri apa yang terjadi / lampiran laporan.</td></tr>
+        <tr><td><b>Pengaturan</b> <span class="badge">BARU v9.2.5</span></td>
+            <td><b>Threshold live</b> per node per metrik (ubah → langsung berlaku
+                tanpa restart), kalibrasi ulang dari BASE, ganti sandi, bot Telegram.</td>
+            <td>Menyetel sensitivitas deteksi &amp; konfigurasi akun.</td></tr>
+        <tr><td><b>Bantuan</b></td>
+            <td>Halaman ini.</td>
+            <td>Saat bingung (atau lupa cara pakai).</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ================= NODE ================= -->
+<div class="panel" id="node" style="margin-bottom:16px">
+  <h3>Membaca Halaman Node</h3>
+  <div class="cols2">
+    <div>
+      <p class="hb"><b>Status kehadiran (TERHUBUNG / OFFLINE)</b> dihitung dari bukti
+      terbaru, bukan data lama. Sumber bukti (tertera di kartu):</p>
+      <ul>
+        <li><code>ping</code> — node menjawab ICMP ping (dicek tiap 5 detik). Node mati
+            akan tertandai OFFLINE dalam ≤ 15 detik.</li>
+        <li><code>mqtt</code> — pesan sensor terakhir diterima broker dalam batas wajar
+            (2,5 × interval publish node).</li>
+        <li><code>trafik</code> — analyzer masih melihat paket dari IP node ini.</li>
+        <li><code>lwt</code> — firmware mengirim Last Will “offline” (bila didukung).</li>
+      </ul>
+      <p class="hb">Kalau tidak ada perangkat yang menyala, angka <b>node terhubung = 0</b> —
+      dashboard tidak pernah “mengarang” node online dari data basi.</p>
+    </div>
+    <div>
+      <p class="hb"><b>Nilai sensor realtime</b> diambil langsung dari subscribe
+      <code>iot/#</code> di broker: suhu (°C), kelembaban (%), jarak (cm), cahaya (lux).
+      Format payload JSON maupun teks biasa sama-sama dikenali. Pembacaan berumur lebih
+      dari interval publish akan tampak pudar bertanda umurnya.</p>
+      <p class="hb"><b>Foto live</b> dari ESP32-CAM: setiap payload JPEG pada topik
+      <code>iot/kamera</code> langsung tampil di kartu (badge merah LIVE). Klik
+      “buka penuh” untuk melihat resolusi penuh.</p>
+    </div>
+  </div>
+</div>
+
+<!-- ================= METRIK ================= -->
+<div class="panel" id="metrik" style="margin-bottom:16px">
+  <h3>Metrik &amp; Cara Kerja Threshold</h3>
+  <div class="cols2">
+    <div>
+      <p class="hb">Setiap detik, analyzer menghitung tiga metrik per perangkat dari
+      paket MQTT PUBLISH yang tertangkap tshark:</p>
+      <ul>
+        <li><b>PPS</b> — jumlah PUBLISH per detik. Naik drastis = indikasi flooding
+            (skenario S1/S2/S4).</li>
+        <li><b>BPS</b> — total byte per detik. Membengkak = volume trafik abnormal.</li>
+        <li><b>avg_pkt_size</b> — rata-rata byte per pesan. Membesar = payload abnormal /
+            oversized (skenario S3).</li>
+      </ul>
+      <p class="hb">Threshold tiap metrik dikalibrasi dari trafik normal:
+      <code>threshold = median + 3 × 1,4826 × MAD</code> (hasil
+      <code>threshold_baseline.py</code>), sehingga ambangnya menyesuaikan karakter
+      tiap node — kamera boleh besar, sensor suhu kecil.</p>
+    </div>
+    <div>
+      <p class="hb"><b>Aturan pemicu ALERT</b> (agar tidak gampang false alarm):</p>
+      <ul>
+        <li><b>2-of-3</b> — minimal 2 dari 3 window terakhir di atas threshold.</li>
+        <li><b>Override</b> — langsung ALERT bila PPS/BPS ≥ 5× threshold atau
+            avg_pkt_size ≥ 3× threshold.</li>
+        <li><b>Recovery</b> — ALERT kembali normal setelah 60 detik tenang.</li>
+        <li><b>Cooldown</b> — notifikasi Telegram duplikat ditekan 30 detik.</li>
+      </ul>
+      <p class="hb">Tanda <span class="tag">indikasi S1/S3/S4</span> pada log adalah
+      perkiraan skenario, bukan diagnosis final — verifikasi lewat grafik dan pcap.</p>
+    </div>
+  </div>
+</div>
+
+<!-- ================= SKENARIO ================= -->
+<div class="panel" style="margin-bottom:16px">
+  <h3>Skenario Pengujian DoS (S1–S4)</h3>
+  <div class="tscroll">
+    <table>
+      <thead><tr><th>Kode</th><th>Nama</th><th>Cara jalan</th><th>Tanda di dashboard</th></tr></thead>
+      <tbody>
+        <tr><td><b>S1</b></td><td>High-frequency publish (flooding)</td>
+            <td>Node dikirim puluhan–ratusan PUBLISH/detik selama ±60 detik.<br>
+                <code>python scripts\attack_sim.py S1 --rate 100 --duration 60</code></td>
+            <td>PPS melesat (≥5× = override langsung ALERT), grafik PPS vertikal.</td></tr>
+        <tr><td><b>S2</b></td><td>Message burst</td>
+            <td>Rentetan burst 50 pesan @100 msg/dtk dengan jeda acak 5–15 detik.<br>
+                <code>python scripts\attack_sim.py S2 --duration 90</code></td>
+            <td>Seri lonjakan PPS berulang; ALERT hilang-timbul mengikuti burst.</td></tr>
+        <tr><td><b>S3</b></td><td>Payload abnormal / oversized</td>
+            <td>Publish payload &gt;200 KB (mis. foto ESP32-CAM) — sesuai Tabel 3.6.2 proposal.<br>
+                <code>python scripts\attack_sim.py S3 --target iot/kamera --size 250</code></td>
+            <td>avg_pkt_size &amp; BPS node kecil menembus threshold.</td></tr>
+        <tr><td><b>S4</b></td><td>Multi-device burst</td>
+            <td>4 node serentak flooding ±10 detik.<br>
+                <code>python scripts\attack_sim.py S4 --duration 10</code></td>
+            <td>Beberapa node ALERT pada metrik yang sama; banner menunjuk S4.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ================= DATASET ================= -->
+<div class="panel" id="dataset" style="margin-bottom:16px">
+  <h3>Menarik Dataset Anomali</h3>
+  <div class="cols2">
+    <div>
+      <p class="hb">Halaman <b>Anomali &amp; Dataset</b> menyimpan dua jenis bukti:</p>
+      <ul>
+        <li><b>Window &gt; threshold</b> — <i>setiap</i> detik yang melampaui ambang
+            (pps, bps, atau avg_pkt_size), lengkap dengan nilai dan rasionya. Ini dataset
+            mentah penelitian, otomatis tercatat selama analyzer berjalan ke
+            <code>run/anomaly_windows.csv</code>.</li>
+        <li><b>Event deteksi</b> — ringkasan episode ALERT/RECOVERY dari mesin deteksi
+            (sudah menerapkan 2-of-3, override, recovery).</li>
+      </ul>
+      <p class="hb">Klik tombol <b>Unduh … (CSV/JSON)</b> di bagian atas halaman untuk
+      menyimpannya. Berkas hasil perekaman sesi (<code>run_session.py</code> /
+      <code>pcap_analyzer.py</code>) di folder <code>data/</code> juga bisa diunduh
+      dari tabel paling bawah.</p>
+    </div>
+    <div>
+      <p class="hb"><b>Alur pengujian yang disarankan:</b></p>
+      <ol>
+        <li>Pastikan threshold terkalibrasi (indikator di footer: “threshold:
+            terkalibrasi”).</li>
+        <li>Jalankan analyzer (live) atau <code>run_session.py --label S1</code>.</li>
+        <li>Jalankan skenario serangan dari mesin penyerang — sekarang cukup
+            <code>python scripts\attack_sim.py S1</code> (laptop penyerang;
+            opsi <code>--rate</code>, <code>--duration</code>, <code>--target</code>,
+            <code>--size</code>; daftar lengkap: <code>--list</code>).</li>
+        <li>Buka Anomali &amp; Dataset → verifikasi window &amp; event masuk.</li>
+        <li>Unduh CSV → olah di Excel/pandas untuk Bab 6 laporan.</li>
+      </ol>
+    </div>
+  </div>
+</div>
+
+<!-- ================= FITUR DASAR ================= -->
+<div class="panel" style="margin-bottom:16px">
+  <h3>Fitur Dasar Dashboard</h3>
+  <div class="cols2">
+    <div>
+      <p class="hb"><b>Tema gelap / terang</b> — tombol bulan/matahari di kanan atas.
+      Pilihan tersimpan di browser dan otomatis mengikuti tema sistem saat pertama kali
+      dibuka.</p>
+      <p class="hb"><b>Ganti kata sandi &amp; tes Telegram</b> — klik nama akun Anda
+      (Pengaturan) di kanan atas. Sesi login berakhir otomatis setelah 30 menit idle;
+      5× gagal login = IP dikunci 5 menit.</p>
+    </div>
+    <div>
+      <p class="hb"><b>Grafik PPS</b> — menu <code>/pps</code>: 4 panel realtime
+      (PPS, B/s, distribusi, ukuran paket) refresh 1 detik tanpa Docker.
+      Grafana asli tetap tersedia di <code>localhost:3000</code> untuk analisis
+      time-series InfluxDB (login admin/admin) bila stack Docker dijalankan.</p>
+      <p class="hb"><b>Data demo tanpa perangkat</b> — <code>jalankan_demo.bat</code>
+      memutar ulang <code>data/demo_serangan.csv</code> 10× lebih cepat: banner merah,
+      9 ALERT, dataset anomali terisi — cocok untuk latihan presentasi.</p>
+    </div>
+  </div>
+</div>
+
+<!-- ================= SERANGAN & GRAFANA (v8.1) ================= -->
+<div class="panel" id="serang" style="margin-bottom:16px">
+  <h3>Menu Serangan — Uji Skenario dari Web (baru v8.1; deteksi realtime v9.2.5)</h3>
+  <p>Halaman <b>Serangan</b> menggantikan kebiasaan mengetik perintah di Serial
+  Monitor atau CMD. Pilih kartu skenario (S1–S4), pilih node target dari
+  <b>dropdown</b> (semua node terdaftar tampil — v8.2), atur rate/durasi, lalu
+  tekan <b>MULAI SERANGAN</b>. Sistem menjalankan
+  <code>scripts/attack_sim.py</code> dari laptop server sebagai penyerang;
+  tombol <b>STOP</b> menghentikannya kapan saja, dan keluaran attack_sim tampil
+  langsung di halaman. Sejak v8.2 dampak serangan <b>pasti terlihat</b> di
+  Beranda (banner + grafik PPS) dan menu Anomali (window ditandai kode S1–S4)
+  karena metrik tshark + MQTT digabung.</p>
+  <ul>
+    <li><b>S1 — High-frequency publish:</b> banjir pesan konstan (default 100/dtk,
+        60 dtk) → PPS melonjak → ALERT PUBLISH-FLOOD.</li>
+    <li><b>S2 — Message burst:</b> gelombang 50 pesan berulang dengan jeda acak →
+        pola gigi gergaji di grafik PPS.</li>
+    <li><b>S3 — Payload abnormal:</b> pesan besar &gt;200 KB/dtk → BPS &amp; ukuran
+        paket melonjak → ALERT OVERSIZED-PAYLOAD.</li>
+    <li><b>S4 — Multi-device burst:</b> 4 topik node diserang serentak → semua
+        node ALERT bersamaan (indikasi serangan terdistribusi).</li>
+  </ul>
+  <p>Tombol <b>Tes Sistem</b> di halaman yang sama memeriksa sekaligus: broker,
+  subscribe sensor, tshark, sumber metrik, InfluxDB, Grafana, dan Telegram —
+  praktis sebelum demo. Catatan: serangan web ber-asal dari IP laptop server;
+  untuk demo dua laptop (IP penyerang terpisah) jalankan attack_sim.py lewat CMD
+  di laptop penyerang.</p>
+</div>
+
+<div class="panel" id="grafana" style="margin-bottom:16px">
+  <h3>Menu Grafik PPS — 4 Panel Realtime (baru v8.3)</h3>
+  <p>Halaman <b>Grafik PPS</b> (menggantikan menu Grafana ter-embed) menampilkan
+  grafik realtime buatan sendiri yang refresh <b>tiap 1 detik</b> tanpa perlu
+  Docker: <b>(1)</b> Packet Rate per Perangkat (PPS) lengkap dengan garis
+  threshold putus-putus dan nilai terkini di ujung tiap garis, <b>(2)</b> Byte
+  Rate per Perangkat (B/s), <b>(3)</b> doughnut Distribusi Trafik per Node,
+  <b>(4)</b> Rata-rata Ukuran Paket per Node — plus tabel node realtime (IP,
+  topik, PPS, B/s, total pesan). Paling sering dipakai saat uji serangan:
+  lonjakan S1/S2 langsung terlihat di panel PPS, S3 di panel B/s &amp; ukuran
+  paket. Grafana (mulai_stack.bat) tetap bisa dipakai terpisah di
+  localhost:3000 bila ingin analisis jangka panjang.</p>
+</div>
+
+<div class="panel" id="sumbermetrik" style="margin-bottom:16px">
+  <h3>Kenapa PPS/BPS Sekarang Selalu Terbaca? (v8.1)</h3>
+  <p>Sejak v8.1, <b>dashboard sudah memuat analyzer di dalam prosesnya</b> —
+  cukup jalankan <code>jalankan_dashboard.bat</code>, tidak perlu lagi membuka
+  jendela analyzer terpisah. Sumber metriknya otomatis (tertulis di panel
+  Kesehatan Sistem dan sub-kartu KPI):</p>
+  <ul>
+    <li><b>tshark (interface …) — terintegrasi:</b> dipakai bila Wireshark
+        terpasang; perangkat dikenali dari IP (paling akurat, cocok dengan
+        pcap/Grafana). Interface dipilih otomatis; pakai variabel
+        <code>MINT_IFACE</code> bila salah tebak.</li>
+    <li><b>MQTT langsung (fallback):</b> dipakai bila tshark tidak ada/gagal —
+        PPS/BPS dihitung dari pesan yang diterima subscribe iot/#; perangkat
+        dikenali dari topik. Inilah alasan metrik <b>tidak pernah 0 lagi</b>
+        selama broker menyala.</li>
+  </ul>
+  <p><code>jalankan_analyzer.bat</code> tetap tersedia untuk sesi mandiri
+  (rekam pcap/kalibrasi/replay) — saat dia aktif, analyzer terintegrasi
+  otomatis menyingkir (standby) lalu kembali mengambil alih begitu ditutup.</p>
+</div>
+
+<!-- ================= FAQ ================= -->
+<div class="panel" id="faq">
+  <h3>FAQ / Pemecahan Masalah</h3>
+  <details class="faq"><summary>Nilai sensor tidak muncul di kartu node</summary>
+    <p>Pastikan (1) broker Mosquitto jalan (<code>mulai_stack.bat</code>), (2) panel
+    Kesehatan Sistem di Beranda menunjukkan “MQTT cache AKTIF”, (3) firmware publish ke
+    topik yang terdaftar di <code>devices.json</code> (mis. <code>iot/suhu</code>).
+    Payload apa pun (JSON atau teks angka) akan dikenali; kalau tetap kosong, cek dengan
+    <code>python scripts/test_subscribe.py</code> apakah pesan benar sampai ke broker.</p></details>
+  <details class="faq"><summary>Status node selalu OFFLINE padahal perangkat menyala</summary>
+    <p>Dashboard menilai kehadiran dari ping/mqtt/trafik. Cek: IP di
+    <code>devices.json</code> sama dengan IP asli ESP32 (lihat serial monitor), laptop
+    dan ESP32 satu subnet (192.168.7.x), dan firewall Windows tidak memblokir ping.
+    Sumber bukti yang dipakai tertulis kecil di kartu node.</p></details>
+  <details class="faq"><summary>Foto kamera tidak tampil</summary>
+    <p>Foto hanya tampil bila payload benar-benar JPEG (diawali byte FF D8). Firmware
+    ESP32-CAM standar sudah seperti itu. Untuk uji tanpa perangkat gunakan
+    <code>python scripts/test_publish.py --foto</code>.</p></details>
+  <details class="faq"><summary>Banner “MENUNGGU DATA” terus-menerus</summary>
+    <p>Sejak v8.1 analyzer sudah terintegrasi di dashboard. Banner ini hanya muncul
+    bila belum ada pesan sama sekali (broker mati atau node belum menyala) — cek
+    panel Kesehatan Sistem / tombol Tes Sistem di menu Serangan. Untuk demo tanpa
+    perangkat: <code>python scripts/test_publish.py</code> atau
+    <code>jalankan_demo.bat</code> (mode replay).</p></details>
+  <details class="faq"><summary>Metrik PPS/BPS terbaca tapi “MQTT langsung” — apa artinya?</summary>
+    <p>Berarti tshark/Wireshark tidak tersedia sehingga metrik dihitung dari pesan
+    MQTT yang diterima dashboard (perangkat dikenali dari topik). Semua fitur
+    deteksi tetap jalan; bedanya serangan dari laptop lain tercatat pada topik
+    yang diserang, bukan pada IP penyerang. Instal Wireshark bila ingin atribusi
+    per-IP seperti data pcap.</p></details>
+  <details class="faq"><summary>Halaman Anomali kosong</summary>
+    <p>Window hanya tercatat bila (1) analyzer sedang berjalan, (2) thresholds.json
+    sudah dikalibrasi, dan (3) ada trafik yang melebihi threshold. Mode demo
+    otomatis mengisi tabel ini. Data lama tetap ada selama file
+    <code>run/anomaly_windows.csv</code> tidak dihapus.</p></details>
+  <details class="faq"><summary>ModuleNotFoundError: flask / psutil</summary>
+    <p>Install dependensi host: <code>pip install -r requirements.txt</code> di
+    terminal proyek (pastikan venv aktif bila memakai venv).</p></details>
+  <details class="faq"><summary>tshark tidak terdeteksi</summary>
+    <p>Installer Wireshark tidak menambah PATH. Jalankan
+    <code>set PATH=%PATH%;C:\Program Files\Wireshark</code> lalu buka terminal baru,
+    atau biarkan MINT mendeteksi lokasi instalasinya otomatis.</p></details>
+  <details class="faq"><summary>ESP32 tidak bisa connect ke broker</summary>
+    <p>Pastikan IP laptop = <code>192.168.7.101</code> (set IP statis), Docker
+    mem-publish port 1883, dan firewall membuka TCP 1883:
+    <code>netsh advfirewall firewall add rule name="MQTT" dir=in action=allow protocol=TCP localport=1883</code>.</p></details>
+  <details class="faq"><summary>Lupa kata sandi dashboard</summary>
+    <p>Gunakan <code>python dashboard/add_user.py</code> dari terminal untuk mengganti
+    sandi akun mana pun.</p></details>
+</div>
+
+<style>
+  .steps{display:flex;flex-direction:column;gap:11px}
+  .step{display:flex;gap:13px;align-items:flex-start;background:var(--panel2);
+        border:1px solid var(--line);border-radius:11px;padding:12px 14px;
+        font-size:13.5px;line-height:1.6}
+  .step .no{width:28px;height:28px;border-radius:50%;background:var(--cyan-dim);
+            color:var(--cyan);font-weight:700;display:flex;align-items:center;
+            justify-content:center;flex:none;font-size:14px}
+  .cols2{display:grid;grid-template-columns:1fr 1fr;gap:6px 26px}
+  @media(max-width:880px){.cols2{grid-template-columns:1fr}}
+  .hb{font-size:13.5px;line-height:1.65;margin-bottom:9px}
+  ul,ol{margin:0 0 10px 20px}
+  li{font-size:13.5px;line-height:1.65;margin-bottom:5px}
+  code{background:var(--cyan-dim);color:var(--cyan);border-radius:6px;
+       padding:1.5px 7px;font-family:Consolas,monospace;font-size:12.5px}
+  details.faq{border:1px solid var(--line);border-radius:10px;margin-bottom:8px;
+              background:var(--panel2);overflow:hidden}
+  details.faq summary{padding:12px 14px;cursor:pointer;font-size:13.5px;font-weight:600;
+                      user-select:none;list-style:none;display:flex;gap:9px;align-items:center}
+  details.faq summary::before{content:'+';color:var(--cyan);font-weight:700;
+                              font-size:16px;width:14px}
+  details.faq[open] summary::before{content:'–'}
+  details.faq p{padding:0 16px 13px 39px;font-size:13px;line-height:1.65;color:var(--text)}
+</style>
+{% endblock %}
+{% block scripts %}{% endblock %}
